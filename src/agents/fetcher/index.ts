@@ -1,10 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
-import {{ Client }} from 'pg';
+import { Client } from 'pg';
 const connection = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/email_rag';
-const client = new Client({{ connectionString: connection }});
+const client = new Client({ connectionString: connection });
 
-async function main() {{
+async function main() {
   await client.connect();
   console.log('Connected to DB for Fetcher');
   const emails = await client.query(`
@@ -13,7 +13,7 @@ async function main() {{
     WHERE m.id IS NULL
     LIMIT 10
   `);
-  for (const e of emails.rows) {{
+  for (const e of emails.rows) {
     const subject = e.subject || '';
     const body = e.body || '';
     const is_meeting = /meeting|meet|call/i.test(subject+body);
@@ -24,12 +24,12 @@ async function main() {{
     await client.query(
       `INSERT INTO email_meta(email_id, is_meeting, is_escalation, is_hierarchy, is_client, is_urgent, classification)
        VALUES($1,$2,$3,$4,$5,$6,$7)`,
-      [e.id, is_meeting, is_escalation, is_hierarchy, is_client, is_urgent, JSON.stringify({{subject}})]
+      [e.id, is_meeting, is_escalation, is_hierarchy, is_client, is_urgent, JSON.stringify({ subject })]
     );
     console.log('Classified email', e.id);
-  }}
+  }
   await client.end();
   console.log('Done Fetcher');
-}}
+}
 
-main().catch(e=>{{console.error(e); process.exit(1)}});
+main().catch(e => { console.error(e); process.exit(1) });

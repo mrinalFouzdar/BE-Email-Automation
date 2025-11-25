@@ -1,3 +1,4 @@
+"use strict";
 // import express from 'express';
 // import cors from 'cors';
 // import bodyParser from 'body-parser';
@@ -6,11 +7,13 @@
 // import dotenv from 'dotenv';
 // import fetch from 'node-fetch';
 // dotenv.config();
-
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
 // const app = express();
 // app.use(cors());
 // app.use(bodyParser.json());
-
 // app.get("/", (req, res) => {
 //   res.send("Email RAG Backend is running ✔️");
 // });
@@ -19,7 +22,6 @@
 //   const url = createAuthUrl();
 //   res.redirect(url);
 // });
-
 // // OAuth callback
 // app.get('/oauth2/callback', async (req, res) => {
 //   const code = req.query.code as string;
@@ -32,7 +34,6 @@
 //     res.status(500).send('OAuth failed');
 //   }
 // });
-
 // // similarity endpoint — accepts ?q=some text and returns top matches
 // app.get('/api/similar', async (req, res) => {
 //   try {
@@ -59,12 +60,8 @@
 //     res.status(500).json({ error: 'similarity failed' });
 //   }
 // });
-
 // export default app;
-
-
 // import { processAndEmbed } from './process_with_embeddings';
-
 // app.post('/api/process-with-embeddings', async (_req, res) => {
 //   try {
 //     const n = await processAndEmbed();
@@ -74,39 +71,33 @@
 //     res.status(500).json({ error: 'processing failed' });
 //   }
 // });
-import express from 'express';
-import cors from 'cors';
-import bodyParser from 'body-parser';
-import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger';
-import authRoutes from './modules/auth/auth.routes';
-import emailRoutes from './modules/emails/email.routes';
-import reminderRoutes from './modules/reminders/reminder.routes';
-import classifyRoutes from './modules/classify/classify.routes';
-import accountRoutes from './modules/accounts/account.routes';
-import extensionRoutes from './modules/extension/extension.routes';
-import { errorHandler } from './core/error';
-
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
-
+const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
+const body_parser_1 = __importDefault(require("body-parser"));
+const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
+const swagger_1 = require("./config/swagger");
+const auth_routes_1 = __importDefault(require("./modules/auth/auth.routes"));
+const email_routes_1 = __importDefault(require("./modules/emails/email.routes"));
+const reminder_routes_1 = __importDefault(require("./modules/reminders/reminder.routes"));
+const classify_routes_1 = __importDefault(require("./modules/classify/classify.routes"));
+const account_routes_1 = __importDefault(require("./modules/accounts/account.routes"));
+const extension_routes_1 = __importDefault(require("./modules/extension/extension.routes"));
+const error_1 = require("./core/error");
+const app = (0, express_1.default)();
+app.use((0, cors_1.default)());
+app.use(body_parser_1.default.json());
 app.get('/', (_req, res) => res.send('Email RAG Backend is running'));
-
 // Swagger Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'Email RAG API Docs'
+app.use('/api-docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(swagger_1.swaggerSpec, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Email RAG API Docs'
 }));
-
 // API Routes
-app.use('/oauth2', authRoutes);
-app.use('/api/emails', emailRoutes);
-app.use('/api/reminders', reminderRoutes);
-app.use('/api/classify', classifyRoutes);
-app.use('/api/accounts', accountRoutes);
-app.use('/api/extension', extensionRoutes);
-
-app.use(errorHandler);
-
-export default app;
+app.use('/oauth2', auth_routes_1.default);
+app.use('/api/emails', email_routes_1.default);
+app.use('/api/reminders', reminder_routes_1.default);
+app.use('/api/classify', classify_routes_1.default);
+app.use('/api/accounts', account_routes_1.default);
+app.use('/api/extension', extension_routes_1.default);
+app.use(error_1.errorHandler);
+exports.default = app;
