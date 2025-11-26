@@ -1,11 +1,13 @@
 import dotenv from 'dotenv';
 dotenv.config();
 import { Client } from 'pg';
-import OpenAI from 'openai';
+// COMMENTED OUT - Using local LLM instead
+// import OpenAI from 'openai';
 
 const connection = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/email_rag';
 const client = new Client({ connectionString: connection });
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// COMMENTED OUT - Using local LLM instead
+// const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 async function isMoMEmail(subject: string, body: string): Promise<boolean> {
   // First check with regex for common MoM patterns
@@ -14,34 +16,38 @@ async function isMoMEmail(subject: string, body: string): Promise<boolean> {
     return true;
   }
 
+  // COMMENTED OUT - OpenAI detection (using local LLM instead)
   // Use OpenAI for more sophisticated detection
-  try {
-    const prompt = `Is this email a "Minutes of Meeting" (MoM) or meeting notes/summary email?
+  // try {
+  //   const prompt = `Is this email a "Minutes of Meeting" (MoM) or meeting notes/summary email?
+  //
+  // Subject: ${subject}
+  // Body: ${body.substring(0, 500)}
+  //
+  // A MoM email typically contains:
+  // - Summary of what was discussed in a meeting
+  // - Action items or decisions made
+  // - Attendees list
+  // - Meeting recap or notes
+  //
+  // Respond with ONLY "true" or "false".`;
+  //
+  //   const response = await openai.chat.completions.create({
+  //     model: 'gpt-4o-mini',
+  //     messages: [{ role: 'user', content: prompt }],
+  //     temperature: 0.1,
+  //     max_tokens: 10
+  //   });
+  //
+  //   const answer = response.choices[0].message.content?.toLowerCase().trim();
+  //   return answer === 'true';
+  // } catch (error) {
+  //   console.error('OpenAI error in isMoMEmail:', error);
+  //   return false;
+  // }
 
-Subject: ${subject}
-Body: ${body.substring(0, 500)}
-
-A MoM email typically contains:
-- Summary of what was discussed in a meeting
-- Action items or decisions made
-- Attendees list
-- Meeting recap or notes
-
-Respond with ONLY "true" or "false".`;
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.1,
-      max_tokens: 10
-    });
-
-    const answer = response.choices[0].message.content?.toLowerCase().trim();
-    return answer === 'true';
-  } catch (error) {
-    console.error('OpenAI error in isMoMEmail:', error);
-    return false;
-  }
+  // For now, only use regex detection (OpenAI disabled)
+  return false;
 }
 
 function subjectsAreSimilar(subject1: string, subject2: string): boolean {

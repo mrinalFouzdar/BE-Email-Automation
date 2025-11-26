@@ -1,9 +1,11 @@
 import { client } from '../../config/db';
-import OpenAI from 'openai';
+// COMMENTED OUT - Using local LLM instead of OpenAI
+// import OpenAI from 'openai';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// COMMENTED OUT - Using local LLM instead
+// const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function classifyUnprocessed() {
   const emails = await client.query(`
@@ -20,15 +22,19 @@ export async function classifyUnprocessed() {
     const is_hierarchy = /boss|manager|director|ceo/i.test(subject+body);
     const is_client = /client|customer|vendor/i.test(subject+body);
     const is_urgent = is_escalation || /urgent/i.test(subject+body);
+    // COMMENTED OUT - OpenAI embeddings (using local LLM instead)
     // get embedding
     let embedding = null;
-    try {
-      const resp = await openai.embeddings.create({ model: 'text-embedding-3-small', input: subject + '\n\n' + body });
-      embedding = resp.data[0].embedding;
-      console.log("🚀 ~ classifyUnprocessed ~ embedding:", embedding)
-    } catch (err) {
-      console.warn('Embedding failed', err);
-    }
+    // try {
+    //   const resp = await openai.embeddings.create({ model: 'text-embedding-3-small', input: subject + '\n\n' + body });
+    //   embedding = resp.data[0].embedding;
+    //   console.log("🚀 ~ classifyUnprocessed ~ embedding:", embedding)
+    // } catch (err) {
+    //   console.warn('Embedding failed', err);
+    // }
+
+    // Note: Embeddings disabled for now (was using OpenAI)
+    // Can implement local embeddings later if needed
     await client.query(
       `INSERT INTO email_meta(email_id, is_meeting, is_escalation, is_hierarchy, is_client, is_urgent, classification, embedding)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,

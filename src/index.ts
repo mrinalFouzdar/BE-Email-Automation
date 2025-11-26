@@ -5,6 +5,7 @@ import app from './app';
 import { connect } from './config/db';
 import { AgentRunner } from './agents/runner';
 import { runMigrations } from './migrate';
+import { startImapSyncScheduler, stopImapSyncScheduler } from './jobs/scheduler';
 
 // import processEmails from './emailProcessor';
 
@@ -37,6 +38,14 @@ async function startServer() {
       console.log('⚠️  Agent runner disabled (set RUN_AGENTS=true to enable)');
     }
 
+    // 5. Start IMAP Sync Scheduler (runs every 1 hour for IMAP accounts only)
+    const runImapSync = process.env.RUN_IMAP_SYNC !== 'false'; // Default: true
+    if (runImapSync) {
+      startImapSyncScheduler();
+    } else {
+      console.log('⚠️  IMAP Sync Scheduler disabled (set RUN_IMAP_SYNC=true to enable)');
+    }
+
     console.log('');
     console.log('====================================');
     console.log('🚀 Backend is ready!');
@@ -58,11 +67,13 @@ startServer();
 process.on('SIGINT', async () => {
   console.log('\nShutting down server...');
   await agentRunner.stop();
+  stopImapSyncScheduler();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('\nShutting down server...');
   await agentRunner.stop();
+  stopImapSyncScheduler();
   process.exit(0);
 });

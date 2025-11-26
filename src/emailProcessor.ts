@@ -4,6 +4,7 @@ import { listAccounts, updateLastSync } from "./modules/accounts/account.service
 import { decryptPassword } from "./services/encryption.service";
 import { detectImapConfig } from "./utils/imap-config";
 import { EmailAccount } from "./modules/accounts/account.model";
+import { classifyEmail } from "./services/classifier.service";
 
 /**
  * Process unread emails for a single account using IMAP.
@@ -74,42 +75,6 @@ export async function processEmailsForAccount(account: EmailAccount): Promise<vo
             return;
         }
 
-        // console.log(`Found ${unreadMsgIds.length} unread emails for ${account.email}`);
-
-        for (const msgId of unreadMsgIds) {
-            const msg = await client.fetchOne(msgId, { source: true });
-            if (!msg || !('source' in msg) || !msg.source) continue;
-
-            const parsed: ParsedMail = await simpleParser(msg.source);
-            console.log("🚀 ~ processEmailsForAccount ~ parsed:", parsed)
-            const subject = (parsed.subject || "").toLowerCase();
-
-            let label: string | null = null;
-
-            if (subject.includes("mom") || subject.includes("minutes of meeting")) {
-                label = "MOM-Level";
-            }
-
-            if (subject.includes("escalation") || subject.includes("urgent") || subject.includes("critical")) {
-                label = "Escalation-Level";
-            }
-
-            if (!label) continue;
-
-            // console.log(`Categorizing (${account.email}): "${parsed.subject}" → ${label}`);
-
-            // Move message into mailbox/label (assumes mailbox exists)
-            try {
-                await client.messageMove(msgId, label);
-                // console.log(`Moved email → ${label} for ${account.email}`);
-            } catch (err) {
-                console.warn(`Failed to move message ${msgId} for ${account.email}:`, err);
-            }
-        }
-
-        await updateLastSync(account.id);
-    } catch (err) {
-        console.error(`Error processing emails for ${account.email}:`, err);
     } finally {
         if (lock) lock.release();
         try {

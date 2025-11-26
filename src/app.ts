@@ -1,79 +1,3 @@
-// import express from 'express';
-// import cors from 'cors';
-// import bodyParser from 'body-parser';
-// import { client } from './config/db';
-// import { createAuthUrl, handleCallback } from './oauth';
-// import dotenv from 'dotenv';
-// import fetch from 'node-fetch';
-// dotenv.config();
-
-// const app = express();
-// app.use(cors());
-// app.use(bodyParser.json());
-
-// app.get("/", (req, res) => {
-//   res.send("Email RAG Backend is running ✔️");
-// });
-// // OAuth start
-// app.get('/auth/google', (_req, res) => {
-//   const url = createAuthUrl();
-//   res.redirect(url);
-// });
-
-// // OAuth callback
-// app.get('/oauth2/callback', async (req, res) => {
-//   const code = req.query.code as string;
-//   if (!code) return res.status(400).send('Missing code');
-//   try {
-//     const tokens = await handleCallback(code);
-//     res.send('OAuth success. Tokens stored.');
-//   } catch (err) {
-//     console.error('OAuth callback error', err);
-//     res.status(500).send('OAuth failed');
-//   }
-// });
-
-// // similarity endpoint — accepts ?q=some text and returns top matches
-// app.get('/api/similar', async (req, res) => {
-//   try {
-//     const q = req.query.q as string;
-//     if (!q) return res.status(400).json({ error: 'q required' });
-//     // create embedding via OpenAI
-//     const OpenAI = require('openai').OpenAI;
-//     const clientOpen = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-//     const embResp = await clientOpen.embeddings.create({
-//       model: 'text-embedding-3-small',
-//       input: q
-//     });
-//     const vec = embResp.data[0].embedding;
-//     // run similarity search
-//     const sql = `SELECT e.id, e.subject, e.body, (m.embedding <-> $1::vector) AS distance
-//                  FROM email_meta m JOIN emails e ON m.email_id = e.id
-//                  WHERE m.embedding IS NOT NULL
-//                  ORDER BY m.embedding <-> $1::vector
-//                  LIMIT 5`;
-//     const r = await client.query(sql, [vec]);
-//     res.json(r.rows);
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ error: 'similarity failed' });
-//   }
-// });
-
-// export default app;
-
-
-// import { processAndEmbed } from './process_with_embeddings';
-
-// app.post('/api/process-with-embeddings', async (_req, res) => {
-//   try {
-//     const n = await processAndEmbed();
-//     res.json({ processed: n });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ error: 'processing failed' });
-//   }
-// });
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
@@ -87,12 +11,36 @@ import reminderRoutes from './modules/reminders/reminder.routes.js';
 import classifyRoutes from './modules/classify/classify.routes.js';
 import accountRoutes from './modules/accounts/account.routes.js';
 import extensionRoutes from './modules/extension/extension.routes.js';
+import imapSyncRoutes from './routes/imap-sync.routes.js';
 import { errorHandler } from './core/error.js';
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(passport.initialize());
+
+// Request Logging Middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  const { method, url } = req;
+
+  // Hook into response finish to log after request is processed
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const status = res.statusCode;
+    
+    // Colorize status code
+    let statusColor = '\x1b[32m'; // Green for 2xx
+    if (status >= 300) statusColor = '\x1b[36m'; // Cyan for 3xx
+    if (status >= 400) statusColor = '\x1b[33m'; // Yellow for 4xx
+    if (status >= 500) statusColor = '\x1b[31m'; // Red for 5xx
+    const resetColor = '\x1b[0m';
+
+    console.log(`[${new Date().toISOString()}] ${method} ${url} ${statusColor}${status}${resetColor} - ${duration}ms`);
+  });
+
+  next();
+});
 
 app.get('/', (_req, res) => res.send('Email RAG Backend is running'));
 
@@ -109,6 +57,7 @@ app.use('/api/reminders',  reminderRoutes);
 app.use('/api/classify',  classifyRoutes);
 app.use('/api/accounts',  accountRoutes);
 app.use('/api/extension',  extensionRoutes);
+app.use('/api/imap-sync',  imapSyncRoutes);
 
 app.use(errorHandler);
 

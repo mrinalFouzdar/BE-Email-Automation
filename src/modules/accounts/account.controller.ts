@@ -3,6 +3,7 @@ import * as service from './account.service';
 import * as emailService from '../emails/email.service';
 import { encryptPassword } from '../../services/encryption.service';
 import { fetchEmailsViaImap, testImapConnectionPlain } from '../../services/imap-email.service';
+import { syncSingleImapAccount } from '../../jobs/imap-sync-single.job';
 
 /**
  * @swagger
@@ -127,6 +128,25 @@ export async function createAccount(req: Request, res: Response) {
     }
 
     const account = await service.createAccount(accountData);
+
+    // Trigger immediate sync for IMAP accounts
+    if (accountData.provider_type === 'imap' && account.id) {
+      console.log(`\n🚀 Triggering immediate sync for new IMAP account: ${account.email}`);
+
+      // Run sync asynchronously (don't wait for it to complete)
+      syncSingleImapAccount(account.id)
+        .then((result) => {
+          if (result.success) {
+            console.log(`✅ Initial sync completed for ${account.email}:`, result.stats);
+          } else {
+            console.error(`❌ Initial sync failed for ${account.email}:`, result.error);
+          }
+        })
+        .catch((error) => {
+          console.error(`❌ Initial sync error for ${account.email}:`, error.message);
+        });
+    }
+
     res.json(account);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
