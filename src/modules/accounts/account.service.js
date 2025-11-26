@@ -1,29 +1,21 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.listAccounts = listAccounts;
-exports.getAccountById = getAccountById;
-exports.createAccount = createAccount;
-exports.updateAccountStatus = updateAccountStatus;
-exports.updateLastSync = updateLastSync;
-exports.deleteAccount = deleteAccount;
-const db_1 = require("../../config/db");
-const imap_config_1 = require("../../utils/imap-config");
-async function listAccounts() {
-    const result = await db_1.client.query('SELECT * FROM email_accounts ORDER BY created_at DESC');
+import { client } from '../../config/db';
+import { detectImapConfig } from '../../utils/imap-config';
+export async function listAccounts() {
+    const result = await client.query('SELECT * FROM email_accounts ORDER BY created_at DESC');
     return result.rows;
 }
-async function getAccountById(id) {
-    const result = await db_1.client.query('SELECT * FROM email_accounts WHERE id = $1', [id]);
+export async function getAccountById(id) {
+    const result = await client.query('SELECT * FROM email_accounts WHERE id = $1', [id]);
     return result.rows[0] || null;
 }
-async function createAccount(account) {
+export async function createAccount(account) {
     const providerType = account.provider_type || 'gmail';
     if (providerType === 'imap') {
         // Auto-detect IMAP settings if not provided
         let imapHost = account.imap_host;
         let imapPort = account.imap_port || 993;
         if (!imapHost && account.email) {
-            const config = (0, imap_config_1.detectImapConfig)(account.email);
+            const config = detectImapConfig(account.email);
             if (config) {
                 imapHost = config.host;
                 imapPort = config.port;
@@ -33,7 +25,7 @@ async function createAccount(account) {
             throw new Error('IMAP host is required or email domain is not supported');
         }
         // Create IMAP account
-        const result = await db_1.client.query(`INSERT INTO email_accounts (
+        const result = await client.query(`INSERT INTO email_accounts (
         email, account_name, auto_fetch, fetch_interval, enable_ai_labeling,
         custom_labels, monitored_labels, provider_type, imap_host, imap_port,
         imap_username, imap_password_encrypted, status
@@ -58,7 +50,7 @@ async function createAccount(account) {
     }
     else if (providerType === 'gmail' && account.oauth_client_id) {
         // Create Gmail OAuth account with manual credentials
-        const result = await db_1.client.query(`INSERT INTO email_accounts (
+        const result = await client.query(`INSERT INTO email_accounts (
         email, account_name, auto_fetch, fetch_interval, enable_ai_labeling,
         custom_labels, monitored_labels, provider_type, oauth_client_id,
         oauth_client_secret_encrypted, oauth_refresh_token_encrypted, status
@@ -82,7 +74,7 @@ async function createAccount(account) {
     }
     else {
         // Create Gmail OAuth account (legacy popup flow)
-        const result = await db_1.client.query(`INSERT INTO email_accounts (
+        const result = await client.query(`INSERT INTO email_accounts (
         email, account_name, auto_fetch, fetch_interval, enable_ai_labeling,
         custom_labels, monitored_labels, provider_type, status
       )
@@ -101,12 +93,12 @@ async function createAccount(account) {
         return result.rows[0];
     }
 }
-async function updateAccountStatus(id, status, oauth_token_id) {
-    await db_1.client.query('UPDATE email_accounts SET status = $1, oauth_token_id = $2, updated_at = NOW() WHERE id = $3', [status, oauth_token_id, id]);
+export async function updateAccountStatus(id, status, oauth_token_id) {
+    await client.query('UPDATE email_accounts SET status = $1, oauth_token_id = $2, updated_at = NOW() WHERE id = $3', [status, oauth_token_id, id]);
 }
-async function updateLastSync(id) {
-    await db_1.client.query('UPDATE email_accounts SET last_sync = NOW(), updated_at = NOW() WHERE id = $1', [id]);
+export async function updateLastSync(id) {
+    await client.query('UPDATE email_accounts SET last_sync = NOW(), updated_at = NOW() WHERE id = $1', [id]);
 }
-async function deleteAccount(id) {
-    await db_1.client.query('DELETE FROM email_accounts WHERE id = $1', [id]);
+export async function deleteAccount(id) {
+    await client.query('DELETE FROM email_accounts WHERE id = $1', [id]);
 }

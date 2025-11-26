@@ -1,8 +1,3 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseDate = parseDate;
-exports.formatToISO = formatToISO;
-exports.parseGmailHeaderDate = parseGmailHeaderDate;
 // Convert Gmail RFC822 date → JS Date → ISO string
 function parseDate(dateStr) {
     if (!dateStr)
@@ -26,3 +21,4 @@ function parseGmailHeaderDate(value) {
     const cleaned = value?.replace(/\(.*?\)/g, "").trim() || "";
     return new Date(cleaned);
 }
+export { parseDate, formatToISO, parseGmailHeaderDate };

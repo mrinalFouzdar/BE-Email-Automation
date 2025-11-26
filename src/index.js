@@ -1,27 +1,26 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
-const app_1 = __importDefault(require("./app"));
-const db_1 = require("./config/db");
-const runner_1 = require("./agents/runner");
-const migrate_1 = require("./migrate");
+import dotenv from 'dotenv';
+dotenv.config();
+import app from './app';
+import { connect } from './config/db';
+import { AgentRunner } from './agents/runner';
+import { runMigrations } from './migrate';
+// import processEmails from './emailProcessor';
 const port = process.env.PORT || 4000;
-const agentRunner = new runner_1.AgentRunner();
+const agentRunner = new AgentRunner();
 async function startServer() {
     try {
         // 1. Connect to database
-        await (0, db_1.connect)();
+        await connect();
         console.log('✓ Connected to database');
         // 2. Run migrations automatically
         console.log('');
-        await (0, migrate_1.runMigrations)(false); // false = don't create new connection
+        await runMigrations(false); // false = don't create new connection
         console.log('');
         // 3. Start the Express API server
-        app_1.default.listen(port, () => console.log(`✓ Backend API listening on ${port}`));
+        app.listen(port, () => {
+            console.log(`✓ Backend API listening on ${port}`);
+            // processEmails()
+        });
         // 4. Start the agent runner (runs agents every 5 minutes)
         const runAgents = process.env.RUN_AGENTS !== 'false'; // Default: true
         if (runAgents) {

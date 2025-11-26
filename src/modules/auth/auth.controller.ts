@@ -1,5 +1,7 @@
-import { Request, Response } from 'express';
-import * as service from './auth.service';
+import { Request, Response, NextFunction } from 'express';
+import * as service from './auth.service.js';
+import { passport } from '../../config/passport.js';
+import { CreateUserDto, LoginDto } from '../users/user.model.js';
 
 /**
  * @swagger
@@ -50,4 +52,45 @@ export async function oauthCallback(req: Request, res: Response) {
     console.error('OAuth callback error', err);
     res.status(500).send('OAuth failed');
   }
+}
+
+export async function register(req: Request, res: Response) {
+  try {
+    const userData: CreateUserDto = req.body;
+
+    if (!userData.email || !userData.password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    const result = await service.register(userData);
+
+    res.status(201).json({
+      message: 'Registration successful',
+      user: result.user,
+      token: result.token,
+    });
+  } catch (error: any) {
+    console.error('Registration error:', error);
+    res.status(400).json({ message: error.message || 'Registration failed' });
+  }
+}
+
+export function login(req: Request, res: Response, next: NextFunction) {
+  passport.authenticate('local', { session: false }, (err: any, user: any, info: any) => {
+    if (err) {
+      return res.status(500).json({ message: 'Authentication error' });
+    }
+
+    if (!user) {
+      return res.status(401).json({ message: info?.message || 'Invalid credentials' });
+    }
+
+    const token = service.generateToken(user);
+
+    res.json({
+      message: 'Login successful',
+      user,
+      token,
+    });
+  })(req, res, next);
 }

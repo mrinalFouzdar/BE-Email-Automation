@@ -1,6 +1,11 @@
 import { client, connect } from './config/db';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // List of all migrations in order
 const MIGRATIONS = [
@@ -44,7 +49,8 @@ export async function runMigrations(standalone = true) {
 }
 
 // Run migrations if this file is executed directly
-if (require.main === module) {
+const isMainModule = import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1]);
+if (isMainModule) {
   runMigrations(true).then(() => {
     process.exit(0);
   }).catch(err => {

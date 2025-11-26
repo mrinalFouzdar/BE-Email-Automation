@@ -1,14 +1,6 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.fetchEmailsViaImap = fetchEmailsViaImap;
-exports.testImapConnection = testImapConnection;
-exports.testImapConnectionPlain = testImapConnectionPlain;
-const imap_1 = __importDefault(require("imap"));
-const mailparser_1 = require("mailparser");
-const encryption_service_1 = require("./encryption.service");
+import Imap from 'imap';
+import { simpleParser } from 'mailparser';
+import { decryptPassword } from './encryption.service';
 /**
  * Extracts email addresses from an address string
  */
@@ -30,9 +22,9 @@ function extractEmails(addresses) {
  * @param maxEmails - Maximum number of emails to fetch (default: 50)
  * @returns Array of processed emails
  */
-async function fetchEmailsViaImap(config, maxEmails = 50) {
-    const password = (0, encryption_service_1.decryptPassword)(config.encryptedPassword);
-    const imap = new imap_1.default({
+export async function fetchEmailsViaImap(config, maxEmails = 50) {
+    const password = decryptPassword(config.encryptedPassword);
+    const imap = new Imap({
         user: config.username,
         password: password,
         host: config.host,
@@ -75,7 +67,7 @@ async function fetchEmailsViaImap(config, maxEmails = 50) {
                             buffer += chunk.toString('utf8');
                         });
                         stream.once('end', () => {
-                            (0, mailparser_1.simpleParser)(buffer, (err, parsed) => {
+                            simpleParser(buffer, (err, parsed) => {
                                 if (err) {
                                     console.error(`Parse error for message ${seqno}:`, err);
                                     return;
@@ -133,9 +125,9 @@ async function fetchEmailsViaImap(config, maxEmails = 50) {
  * @param config - IMAP connection configuration
  * @returns True if connection successful
  */
-async function testImapConnection(config) {
-    const password = (0, encryption_service_1.decryptPassword)(config.encryptedPassword);
-    const imap = new imap_1.default({
+export async function testImapConnection(config) {
+    const password = decryptPassword(config.encryptedPassword);
+    const imap = new Imap({
         user: config.username,
         password: password,
         host: config.host,
@@ -161,8 +153,8 @@ async function testImapConnection(config) {
  * @param config - IMAP connection configuration with plain password
  * @returns Success status and error message if failed
  */
-async function testImapConnectionPlain(config) {
-    const imap = new imap_1.default({
+export async function testImapConnectionPlain(config) {
+    const imap = new Imap({
         user: config.username,
         password: config.password,
         host: config.host,

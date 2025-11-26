@@ -1,15 +1,10 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
-const pg_1 = require("pg");
-const openai_1 = __importDefault(require("openai"));
+import dotenv from 'dotenv';
+dotenv.config();
+import { Client } from 'pg';
+import OpenAI from 'openai';
 const connection = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/email_rag';
-const client = new pg_1.Client({ connectionString: connection });
-const openai = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY });
+const client = new Client({ connectionString: connection });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 async function classifyEmail(subject, body, sender) {
     const prompt = `Analyze this email and classify it according to these categories:
 

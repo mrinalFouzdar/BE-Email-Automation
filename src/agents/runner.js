@@ -1,17 +1,11 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.AgentRunner = void 0;
-const pg_1 = require("pg");
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
-class AgentRunner {
+import { Client } from 'pg';
+import dotenv from 'dotenv';
+dotenv.config();
+export class AgentRunner {
     constructor() {
         this.intervalId = null;
         const connection = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/email_rag';
-        this.dbClient = new pg_1.Client({ connectionString: connection });
+        this.dbClient = new Client({ connectionString: connection });
     }
     async start(intervalMinutes = 5) {
         await this.dbClient.connect();
@@ -96,9 +90,8 @@ class AgentRunner {
         return this.dbClient;
     }
 }
-exports.AgentRunner = AgentRunner;
-// Standalone execution
-if (require.main === module) {
+const isMainModule = import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1]);
+if (isMainModule) {
     const runner = new AgentRunner();
     runner.start().catch(err => {
         console.error('Failed to start agent runner:', err);

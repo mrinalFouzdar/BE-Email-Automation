@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.processEmail = processEmail;
-const langchain_service_1 = require("./langchain.service");
+import { processEmailWithLangChain } from './langchain.service';
 /**
  * @swagger
  * /api/extension/process-email:
@@ -68,7 +65,7 @@ const langchain_service_1 = require("./langchain.service");
  *       500:
  *         description: Processing failed
  */
-async function processEmail(req, res) {
+export async function processEmail(req, res) {
     try {
         const { subject, body, sender, senderName, receivedAt } = req.body;
         // Validate required fields
@@ -79,7 +76,7 @@ async function processEmail(req, res) {
             });
         }
         // Process email with LangChain multi-agent system
-        const result = await (0, langchain_service_1.processEmailWithLangChain)({
+        const result = await processEmailWithLangChain({
             subject,
             body,
             sender,

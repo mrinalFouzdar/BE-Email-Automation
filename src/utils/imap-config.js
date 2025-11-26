@@ -1,11 +1,6 @@
-"use strict";
 /**
  * IMAP Auto-detection for common email providers
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.detectImapConfig = detectImapConfig;
-exports.getSupportedProviders = getSupportedProviders;
-exports.isProviderSupported = isProviderSupported;
 // Common IMAP configurations for popular providers
 const IMAP_CONFIGS = {
     // Gmail
@@ -91,7 +86,7 @@ const IMAP_CONFIGS = {
  * @param email - User's email address
  * @returns IMAP configuration or null if unknown provider
  */
-function detectImapConfig(email) {
+export function detectImapConfig(email) {
     const domain = email.split('@')[1]?.toLowerCase();
     if (!domain) {
         return null;
@@ -101,12 +96,12 @@ function detectImapConfig(email) {
 /**
  * Get list of supported providers for UI dropdown
  */
-function getSupportedProviders() {
+export function getSupportedProviders() {
     return Object.keys(IMAP_CONFIGS);
 }
 /**
  * Check if provider is supported
  */
-function isProviderSupported(email) {
+export function isProviderSupported(email) {
     return detectImapConfig(email) !== null;
 }

@@ -1,11 +1,18 @@
 import { OAuth2Client } from 'google-auth-library';
 import dotenv from 'dotenv';
-import { client } from '../../config/db';
+import { client } from '../../config/db.js';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { userService } from '../users/user.service.js';
+import { CreateUserDto, UserWithoutPassword } from '../users/user.model.js';
+import { JWT_SECRET } from '../../config/passport.js';
+
 dotenv.config();
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const REDIRECT_URI = process.env.GMAIL_REDIRECT_URI || 'http://localhost:4000/auth/callback';
+const SALT_ROUNDS = 10;
 
 export function createAuthUrl() {
   const o = new OAuth2Client(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
@@ -26,4 +33,32 @@ export async function handleCallback(code: string) {
     [tokens.access_token || null, tokens.refresh_token || null, tokens.scope || null, tokens.token_type || null, tokens.expiry_date ? new Date(tokens.expiry_date) : null]
   );
   return tokens;
+}
+
+export async function register(userData: CreateUserDto): Promise<{ user: UserWithoutPassword; token: string }> {
+  const existingUser = await userService.findByEmail(userData.email);
+
+  if (existingUser) {
+    throw new Error('User with this email already exists');
+  }
+
+  const hashedPassword = await bcrypt.hash(userData.password, SALT_ROUNDS);
+
+  const user = await userService.create({
+    ...userData,
+    password: hashedPassword,
+  });
+
+  const userWithoutPassword = userService.removePassword(user);
+  const token = generateToken(userWithoutPassword);
+
+  return { user: userWithoutPassword, token };
+}
+
+export function generateToken(user: UserWithoutPassword): string {
+  return jwt.sign(
+    { id: user.id, email: user.email },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
 }

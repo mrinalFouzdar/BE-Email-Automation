@@ -1,12 +1,10 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.runMigrations = runMigrations;
-const db_1 = require("./config/db");
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
+import { client, connect } from './config/db';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 // List of all migrations in order
 const MIGRATIONS = [
     'init.sql',
@@ -15,20 +13,20 @@ const MIGRATIONS = [
     'add_imap_support.sql',
     'add_manual_oauth_support.sql'
 ];
-async function runMigrations(standalone = true) {
+export async function runMigrations(standalone = true) {
     try {
         if (standalone) {
-            await (0, db_1.connect)();
+            await connect();
         }
         console.log('🔄 Running database migrations...');
         for (const migration of MIGRATIONS) {
-            const migrationPath = path_1.default.resolve(__dirname, '../migrations', migration);
-            if (!fs_1.default.existsSync(migrationPath)) {
+            const migrationPath = path.resolve(__dirname, '../migrations', migration);
+            if (!fs.existsSync(migrationPath)) {
                 console.log(`⚠️  Migration file not found: ${migration} (skipping)`);
                 continue;
             }
-            const sql = fs_1.default.readFileSync(migrationPath, 'utf8');
-            await db_1.client.query(sql);
+            const sql = fs.readFileSync(migrationPath, 'utf8');
+            await client.query(sql);
             console.log(`✓ Applied migration: ${migration}`);
         }
         console.log('✅ All migrations completed successfully');
@@ -39,12 +37,13 @@ async function runMigrations(standalone = true) {
     }
     finally {
         if (standalone) {
-            await db_1.client.end();
+            await client.end();
         }
     }
 }
 // Run migrations if this file is executed directly
-if (require.main === module) {
+const isMainModule = import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1]);
+if (isMainModule) {
     runMigrations(true).then(() => {
         process.exit(0);
     }).catch(err => {

@@ -78,18 +78,21 @@ import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger';
-import authRoutes from './modules/auth/auth.routes';
-import emailRoutes from './modules/emails/email.routes';
-import reminderRoutes from './modules/reminders/reminder.routes';
-import classifyRoutes from './modules/classify/classify.routes';
-import accountRoutes from './modules/accounts/account.routes';
-import extensionRoutes from './modules/extension/extension.routes';
-import { errorHandler } from './core/error';
+import { swaggerSpec } from './config/swagger.js';
+import { passport } from './config/passport.js';
+import { } from './middleware/auth.middleware.js';
+import authRoutes from './modules/auth/auth.routes.js';
+import emailRoutes from './modules/emails/email.routes.js';
+import reminderRoutes from './modules/reminders/reminder.routes.js';
+import classifyRoutes from './modules/classify/classify.routes.js';
+import accountRoutes from './modules/accounts/account.routes.js';
+import extensionRoutes from './modules/extension/extension.routes.js';
+import { errorHandler } from './core/error.js';
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+app.use(passport.initialize());
 
 app.get('/', (_req, res) => res.send('Email RAG Backend is running'));
 
@@ -98,14 +101,14 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: 'Email RAG API Docs'
 }));
-
+// requireAuth
 // API Routes
 app.use('/oauth2', authRoutes);
-app.use('/api/emails', emailRoutes);
-app.use('/api/reminders', reminderRoutes);
-app.use('/api/classify', classifyRoutes);
-app.use('/api/accounts', accountRoutes);
-app.use('/api/extension', extensionRoutes);
+app.use('/api/emails',  emailRoutes);
+app.use('/api/reminders',  reminderRoutes);
+app.use('/api/classify',  classifyRoutes);
+app.use('/api/accounts',  accountRoutes);
+app.use('/api/extension',  extensionRoutes);
 
 app.use(errorHandler);
 

@@ -113,7 +113,10 @@ export class AgentRunner {
 }
 
 // Standalone execution
-if (require.main === module) {
+import { fileURLToPath } from 'url';
+const isMainModule = import.meta.url === `file://${process.argv[1]}` || import.meta.url.endsWith(process.argv[1]);
+
+if (isMainModule) {
   const runner = new AgentRunner();
   runner.start().catch(err => {
     console.error('Failed to start agent runner:', err);

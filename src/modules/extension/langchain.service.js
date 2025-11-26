@@ -1,18 +1,12 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.processEmailWithLangChain = processEmailWithLangChain;
-const openai_1 = require("@langchain/openai");
-const openai_2 = require("@langchain/openai");
-const db_1 = require("../../config/db");
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
+import { ChatOpenAI } from '@langchain/openai';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { client } from '../../config/db';
+import dotenv from 'dotenv';
+dotenv.config();
 // Multi-Agent System Components
 class EmailClassifierAgent {
     constructor() {
-        this.llm = new openai_1.ChatOpenAI({
+        this.llm = new ChatOpenAI({
             modelName: 'gpt-4o-mini',
             temperature: 0.1,
             openAIApiKey: process.env.OPENAI_API_KEY,
@@ -69,7 +63,7 @@ Respond with ONLY valid JSON in this exact format:
 }
 class EmbeddingAgent {
     constructor() {
-        this.embeddings = new openai_2.OpenAIEmbeddings({
+        this.embeddings = new OpenAIEmbeddings({
             modelName: 'text-embedding-3-small',
             openAIApiKey: process.env.OPENAI_API_KEY,
         });
@@ -87,7 +81,7 @@ class EmbeddingAgent {
 }
 class StorageAgent {
     async storeEmail(emailData) {
-        const result = await db_1.client.query(`INSERT INTO emails (subject, body, sender_email, sender_name, received_at)
+        const result = await client.query(`INSERT INTO emails (subject, body, sender_email, sender_name, received_at)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id`, [
             emailData.subject,
@@ -99,7 +93,7 @@ class StorageAgent {
         return result.rows[0].id;
     }
     async storeMetadata(emailId, labels, reasoning, embedding) {
-        await db_1.client.query(`INSERT INTO email_meta (
+        await client.query(`INSERT INTO email_meta (
         email_id, is_hierarchy, is_client, is_meeting,
         is_escalation, is_urgent, classification, embedding
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [
@@ -154,7 +148,7 @@ class EmailProcessingOrchestrator {
     }
 }
 // Main export function
-async function processEmailWithLangChain(emailData) {
+export async function processEmailWithLangChain(emailData) {
     const orchestrator = new EmailProcessingOrchestrator();
     return await orchestrator.process(emailData);
 }

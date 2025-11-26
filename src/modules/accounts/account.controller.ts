@@ -153,13 +153,15 @@ export async function fetchAccountEmails(req: Request, res: Response) {
   try {
     const accountId = parseInt(req.params.id);
     const account = await service.getAccountById(accountId);
+    console.log("🚀 ~ fetchAccountEmails ~ account:", account)
 
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
 
     // Fetch emails using the account's OAuth token
-    const fetched = await emailService.fetchFromGmail();
+    const fetched = await emailService.fetchFromGmail(account?.id);
+    console.log("🚀 ~ fetchAccountEmails ~ fetched:", fetched)
 
     // Update last sync
     await service.updateLastSync(accountId);

@@ -6,6 +6,8 @@ import { connect } from './config/db';
 import { AgentRunner } from './agents/runner';
 import { runMigrations } from './migrate';
 
+// import processEmails from './emailProcessor';
+
 const port = process.env.PORT || 4000;
 const agentRunner = new AgentRunner();
 
@@ -21,7 +23,10 @@ async function startServer() {
     console.log('');
 
     // 3. Start the Express API server
-    app.listen(port, () => console.log(`✓ Backend API listening on ${port}`));
+    app.listen(port, () => {
+      console.log(`✓ Backend API listening on ${port}`)
+      // processEmails()
+    });
 
     // 4. Start the agent runner (runs agents every 5 minutes)
     const runAgents = process.env.RUN_AGENTS !== 'false'; // Default: true
