@@ -1,14 +1,18 @@
 import { Client } from 'pg';
 import dotenv from 'dotenv';
+import { EmailProcessingService } from '../services/email-processing.service';
+import { processAllAccounts } from '../emailProcessor';
 dotenv.config();
 
 export class AgentRunner {
   private dbClient: Client;
   private intervalId: NodeJS.Timeout | null = null;
+  private emailProcessor: EmailProcessingService;
 
   constructor() {
     const connection = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/email_rag';
     this.dbClient = new Client({ connectionString: connection });
+    this.emailProcessor = new EmailProcessingService();
   }
 
   async start(intervalMinutes: number = 5) {
@@ -43,9 +47,10 @@ export class AgentRunner {
       // Run agents in sequence
       await this.runFetcher();
       await this.runOrchestrator();
-      await this.runClassifier();
-      await this.runGenerator();
-      await this.runMoMTracker();
+      // Other agents are now integrated into Orchestrator/EmailProcessingService
+      // await this.runClassifier(); 
+      // await this.runGenerator();
+      // await this.runMoMTracker();
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
       console.log(`=== All Agents Completed in ${duration}s ===\n`);
@@ -56,56 +61,42 @@ export class AgentRunner {
 
   private async runFetcher() {
     console.log('[Fetcher] Starting...');
-    // Import and run fetcher logic here
-    // For now, placeholder
+    try {
+      await processAllAccounts();
+    } catch (error) {
+      console.error('[Fetcher] Error:', error);
+    }
     console.log('[Fetcher] Completed');
   }
 
   private async runOrchestrator() {
     console.log('[Orchestrator] Starting...');
+    
+    // Find emails that don't have metadata (haven't been processed)
     const emails = await this.dbClient.query(`
-      SELECT e.* FROM emails e
+      SELECT e.id FROM emails e
       LEFT JOIN email_meta m ON m.email_id = e.id
       WHERE m.id IS NULL
       LIMIT 10
     `);
 
-    for (const e of emails.rows) {
-      const subject = e.subject || '';
-      const body = e.body || '';
-      const is_meeting = /meeting|meet|call/i.test(subject + body);
-      const is_escalation = /asap|urgent|immediately|escalation/i.test(subject + body);
-      const is_hierarchy = /boss|manager|director|ceo/i.test(subject + body);
-      const is_client = /client|customer|vendor/i.test(subject + body);
-      const is_urgent = is_escalation || /urgent/i.test(subject + body);
+    if (emails.rows.length === 0) {
+      console.log('[Orchestrator] No new emails to process');
+      return;
+    }
 
-      await this.dbClient.query(
-        `INSERT INTO email_meta(email_id, is_meeting, is_escalation, is_hierarchy, is_client, is_urgent, classification)
-         VALUES($1,$2,$3,$4,$5,$6,$7)`,
-        [e.id, is_meeting, is_escalation, is_hierarchy, is_client, is_urgent, JSON.stringify({ subject })]
-      );
-      console.log(`[Orchestrator] Classified email ${e.id}`);
+    console.log(`[Orchestrator] Found ${emails.rows.length} new emails to process`);
+
+    for (const e of emails.rows) {
+      await this.emailProcessor.processEmail(e.id);
     }
     console.log('[Orchestrator] Completed');
   }
 
-  private async runClassifier() {
-    console.log('[Classifier] Starting...');
-    // Classifier logic will be imported
-    console.log('[Classifier] Completed');
-  }
-
-  private async runGenerator() {
-    console.log('[Generator] Starting...');
-    // Generator logic will be imported
-    console.log('[Generator] Completed');
-  }
-
-  private async runMoMTracker() {
-    console.log('[MoMTracker] Starting...');
-    // MoMTracker logic will be imported
-    console.log('[MoMTracker] Completed');
-  }
+  // Legacy/Placeholder methods - kept for interface compatibility if needed, but unused
+  private async runClassifier() {}
+  private async runGenerator() {}
+  private async runMoMTracker() {}
 
   getDbClient(): Client {
     return this.dbClient;

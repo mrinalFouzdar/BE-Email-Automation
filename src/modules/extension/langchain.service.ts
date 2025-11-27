@@ -1,5 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { OpenAIEmbeddings } from '@langchain/openai';
+import { ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import { client } from '../../config/db';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -25,15 +26,25 @@ interface ClassificationResult {
 }
 
 // Multi-Agent System Components
-class EmailClassifierAgent {
-  private llm: ChatOpenAI;
+export class EmailClassifierAgent {
+  private llm: ChatOpenAI | ChatGoogleGenerativeAI;
 
   constructor() {
-    this.llm = new ChatOpenAI({
-      modelName: 'gpt-4o-mini',
-      temperature: 0.1,
-      openAIApiKey: process.env.OPENAI_API_KEY,
-    });
+    if (process.env.OPENAI_API_KEY) {
+      this.llm = new ChatOpenAI({
+        modelName: 'gpt-4o-mini',
+        temperature: 0.1,
+        openAIApiKey: process.env.OPENAI_API_KEY,
+      });
+    } else if (process.env.GEMINI_API_KEY) {
+      this.llm = new ChatGoogleGenerativeAI({
+        model: 'gemini-pro',
+        maxOutputTokens: 2048,
+        apiKey: process.env.GEMINI_API_KEY,
+      });
+    } else {
+      throw new Error('No AI API key found (OPENAI_API_KEY or GEMINI_API_KEY)');
+    }
   }
 
   async classify(emailData: EmailData) {
@@ -88,14 +99,23 @@ Respond with ONLY valid JSON in this exact format:
   }
 }
 
-class EmbeddingAgent {
-  private embeddings: OpenAIEmbeddings;
+export class EmbeddingAgent {
+  private embeddings: OpenAIEmbeddings | GoogleGenerativeAIEmbeddings;
 
   constructor() {
-    this.embeddings = new OpenAIEmbeddings({
-      modelName: 'text-embedding-3-small',
-      openAIApiKey: process.env.OPENAI_API_KEY,
-    });
+    if (process.env.OPENAI_API_KEY) {
+      this.embeddings = new OpenAIEmbeddings({
+        modelName: 'text-embedding-3-small',
+        openAIApiKey: process.env.OPENAI_API_KEY,
+      });
+    } else if (process.env.GEMINI_API_KEY) {
+      this.embeddings = new GoogleGenerativeAIEmbeddings({
+        model: 'embedding-001', // or text-embedding-004
+        apiKey: process.env.GEMINI_API_KEY,
+      });
+    } else {
+      throw new Error('No AI API key found for embeddings');
+    }
   }
 
   async generateEmbedding(text: string): Promise<number[]> {

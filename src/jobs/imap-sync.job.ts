@@ -10,7 +10,6 @@ dotenv.config();
 const connection = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5433/email_rag';
 
 // Configuration
-const MAX_EMAILS_PER_BATCH = 50; // Process max 50 emails per sync
 const DELAY_BETWEEN_CLASSIFICATIONS = 500; // 500ms delay between API calls
 
 /**
@@ -75,8 +74,17 @@ export async function runImapSyncJob() {
           encryptedPassword: account.imap_password_encrypted
         };
 
-        console.log(`  📥 Fetching unread emails from IMAP...`);
-        const emails = await fetchEmailsViaImap(imapConfig, MAX_EMAILS_PER_BATCH);
+        // Check if this is the first sync
+        const isFirstSync = !account.last_sync;
+
+        let emails;
+        if (isFirstSync) {
+          console.log(`  📥 First sync - Fetching ALL emails from IMAP...`);
+          emails = await fetchEmailsViaImap(imapConfig); // Fetch all emails
+        } else {
+          console.log(`  📥 Incremental sync - Fetching recent emails from IMAP...`);
+          emails = await fetchEmailsViaImap(imapConfig, 50); // Fetch last 50 emails only
+        }
         console.log(`  ✓ Fetched ${emails.length} emails`);
 
         if (emails.length > 30) {
@@ -143,6 +151,13 @@ export async function runImapSyncJob() {
           );
 
           let aiLabel: string | null = null;
+          let labelsToApply: string[] = [];
+
+          // Only classify UNREAD emails
+          if (!email.isUnread) {
+            console.log(`  ⊙ Skipping classification for read email: "${email.subject.substring(0, 50)}..."`);
+            continue;
+          }
 
           if (metaResult.rows.length === 0) {
             // No classification yet - send to AI model
@@ -156,6 +171,14 @@ export async function runImapSyncJob() {
               );
 
               aiLabel = classification.suggested_label;
+
+              // Determine all applicable labels
+              if (classification.is_meeting) labelsToApply.push('MOM');
+              if (classification.is_escalation) labelsToApply.push('Escalation');
+              if (classification.is_urgent) labelsToApply.push('Urgent');
+              if (aiLabel && aiLabel !== 'Uncategorized' && !labelsToApply.includes(aiLabel)) {
+                 labelsToApply.push(aiLabel);
+              }
 
               // Store classification in database
               await client.query(
@@ -180,16 +203,47 @@ export async function runImapSyncJob() {
                 ]
               );
 
-              // Update email labels in database
-              if (aiLabel && aiLabel !== 'Uncategorized') {
-                await client.query(
-                  `UPDATE emails SET labels = array_append(COALESCE(labels, '{}'), $1) WHERE id = $2`,
-                  [aiLabel, emailId]
-                );
+              // Apply labels to database (both relational and array)
+              for (const labelName of labelsToApply) {
+                 // 1. Get or Create Label ID
+                 let labelId: number | null = null;
+                 const labelRes = await client.query('SELECT id FROM labels WHERE name = $1', [labelName]);
+                 if (labelRes.rows.length > 0) {
+                     labelId = labelRes.rows[0].id;
+                 } else {
+                     // Create label if not exists
+                     const createRes = await client.query(
+                         'INSERT INTO labels (name, color, is_system) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING RETURNING id',
+                         [labelName, '#6B7280', true]
+                     );
+                     if (createRes.rows.length > 0) {
+                         labelId = createRes.rows[0].id;
+                     } else {
+                         const retryRes = await client.query('SELECT id FROM labels WHERE name = $1', [labelName]);
+                         if (retryRes.rows.length > 0) labelId = retryRes.rows[0].id;
+                     }
+                 }
+
+                 if (labelId) {
+                     // 2. Assign to email in relational table
+                     await client.query(
+                         `INSERT INTO email_labels (email_id, label_id, assigned_by, confidence_score)
+                          VALUES ($1, $2, 'ai', 1.0)
+                          ON CONFLICT (email_id, label_id) DO NOTHING`,
+                         [emailId, labelId]
+                     );
+                 }
+
+                 // 3. Update emails table array (avoid duplicates)
+                 await client.query(
+                   `UPDATE emails SET labels = array_append(COALESCE(labels, '{}'), $1)
+                    WHERE id = $2 AND NOT ($1 = ANY(COALESCE(labels, '{}')))`,
+                   [labelName, emailId]
+                 );
               }
 
               totalClassified++;
-              console.log(`  ✓ Classification: ${aiLabel}`);
+              console.log(`  ✓ Classification: ${labelsToApply.join(', ')}`);
 
               // Add delay between classifications to avoid rate limits
               await sleep(DELAY_BETWEEN_CLASSIFICATIONS);
@@ -201,32 +255,39 @@ export async function runImapSyncJob() {
           } else {
             // Already classified - get existing label
             const existingClassification = metaResult.rows[0].classification;
-            if (existingClassification && existingClassification.suggested_label) {
-              aiLabel = existingClassification.suggested_label;
+            if (existingClassification) {
+                if (existingClassification.is_meeting) labelsToApply.push('MOM');
+                if (existingClassification.is_escalation) labelsToApply.push('Escalation');
+                if (existingClassification.is_urgent) labelsToApply.push('Urgent');
+                if (existingClassification.suggested_label && existingClassification.suggested_label !== 'Uncategorized' && !labelsToApply.includes(existingClassification.suggested_label)) {
+                    labelsToApply.push(existingClassification.suggested_label);
+                }
             }
-            console.log(`  ⊙ Already classified: ${aiLabel}`);
+            console.log(`  ⊙ Already classified: ${labelsToApply.join(', ')}`);
           }
 
-          // Step 5: Set AI label on IMAP mailbox (if AI labeling is enabled)
-          if (account.enable_ai_labeling && aiLabel && aiLabel !== 'Uncategorized') {
-            console.log(`  🏷️  Setting label "${aiLabel}" on IMAP mailbox...`);
+          // Set AI labels on IMAP mailbox (if AI labeling is enabled)
+          if (account.enable_ai_labeling && labelsToApply.length > 0) {
+            for (const labelName of labelsToApply) {
+              console.log(`  🏷️  Setting label "${labelName}" on IMAP mailbox...`);
 
-            const labelResult = await syncAILabelToImap(
-              {
-                imap_host: account.imap_host,
-                imap_port: account.imap_port,
-                imap_username: account.imap_username,
-                imap_password_encrypted: account.imap_password_encrypted
-              },
-              messageId,
-              aiLabel
-            );
+              const labelResult = await syncAILabelToImap(
+                {
+                  imap_host: account.imap_host,
+                  imap_port: account.imap_port,
+                  imap_username: account.imap_username,
+                  imap_password_encrypted: account.imap_password_encrypted
+                },
+                messageId,
+                labelName
+              );
 
-            if (labelResult.success) {
-              console.log(`  ✓ Label set successfully on IMAP mailbox`);
-              totalLabeled++;
-            } else {
-              console.log(`  ⚠️  Failed to set label: ${labelResult.error}`);
+              if (labelResult.success) {
+                console.log(`  ✓ Label "${labelName}" set successfully on IMAP mailbox`);
+                totalLabeled++;
+              } else {
+                console.log(`  ⚠️  Failed to set label "${labelName}": ${labelResult.error}`);
+              }
             }
           }
         }

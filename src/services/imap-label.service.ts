@@ -70,7 +70,7 @@ export async function setImapLabel(
       // Gmail IMAP: Labels are treated as mailboxes/folders
       // To add a label, we COPY the message to the label mailbox
       try {
-        const gmailLabel = label.startsWith('AI/') ? label : `AI/${label}`;
+        const gmailLabel = label;
 
         // Ensure the Gmail label/mailbox exists
         // List all mailboxes to check if label exists
@@ -104,7 +104,7 @@ export async function setImapLabel(
         console.warn(`Gmail COPY method failed: ${error.message}`);
         // Fallback: Try using keyword flags (less reliable for Gmail UI)
         try {
-          const prefixedLabel = label.startsWith('AI/') ? label : `AI/${label}`;
+          const prefixedLabel = label;
           await client.messageFlagsAdd(uid, [prefixedLabel], { uid: true });
           console.log(`✓ Added keyword "${prefixedLabel}" to message ${messageId}`);
           await client.logout();
@@ -115,35 +115,76 @@ export async function setImapLabel(
         }
       }
     } else {
-      // Other IMAP servers: Use keyword flags
+      // Other IMAP servers (Outlook, etc.): Create folders and copy emails
       try {
-        await client.messageFlagsAdd(uid, [label], { uid: true });
-        console.log(`✓ Added keyword "${label}" to message ${messageId}`);
-        await client.logout();
-        return { success: true, method: 'keyword' };
-      } catch (error: any) {
-        // If keywords not supported, set standard flags for important emails
-        const importantLabels = ['urgent', 'important', 'priority', 'critical', 'escalation'];
+        // 1. Check if folder exists
+        let folderExists = false;
+        try {
+          const list = await client.list();
+          folderExists = list.some((box: any) => box.path === label);
+        } catch (e) {
+          folderExists = false;
+        }
+
+        // 2. Create folder if it doesn't exist
+        if (!folderExists) {
+          try {
+            await client.mailboxCreate(label);
+            console.log(`  ✓ Created IMAP folder: ${label}`);
+          } catch (createError: any) {
+            // Folder might already exist, continue
+            console.log(`  → IMAP folder may already exist: ${label}`);
+          }
+        }
+
+        // 3. Copy the message to the folder (this creates a labeled copy)
+        await client.messageCopy(uid, label, { uid: true });
+        console.log(`✓ Copied email to folder "${label}"`);
+
+        // 4. Also flag important emails for visibility
+        const importantLabels = ['urgent', 'escalation', 'priority', 'critical'];
         const isImportant = importantLabels.some(imp =>
           label.toLowerCase().includes(imp)
         );
 
         if (isImportant) {
           await client.messageFlagsAdd(uid, ['\\Flagged'], { uid: true });
-          console.log(`✓ Flagged message ${messageId} as important`);
-          await client.logout();
-          return {
-            success: true,
-            method: 'flag',
-            error: 'Keywords not supported, used \\Flagged flag instead'
-          };
+          console.log(`✓ Flagged message as important`);
         }
 
         await client.logout();
-        return {
-          success: false,
-          error: 'IMAP server does not support custom keywords/labels'
-        };
+        return { success: true, method: 'folder-copy' };
+      } catch (error: any) {
+        // Fallback: Try keyword flags if folder creation fails
+        try {
+          await client.messageFlagsAdd(uid, [label], { uid: true });
+          console.log(`✓ Added keyword "${label}" to message ${messageId}`);
+          await client.logout();
+          return { success: true, method: 'keyword' };
+        } catch (keywordError: any) {
+          // Final fallback: Flag important emails
+          const importantLabels = ['urgent', 'important', 'priority', 'critical', 'escalation'];
+          const isImportant = importantLabels.some(imp =>
+            label.toLowerCase().includes(imp)
+          );
+
+          if (isImportant) {
+            await client.messageFlagsAdd(uid, ['\\Flagged'], { uid: true });
+            console.log(`✓ Flagged message ${messageId} as important`);
+            await client.logout();
+            return {
+              success: true,
+              method: 'flag',
+              error: 'Folders and keywords not supported, used \\Flagged flag instead'
+            };
+          }
+
+          await client.logout();
+          return {
+            success: false,
+            error: 'IMAP server does not support folders, keywords, or custom labels'
+          };
+        }
       }
     }
   } catch (error: any) {
@@ -202,8 +243,8 @@ export async function syncAILabelToImap(
     return { success: true }; // Skip uncategorized labels
   }
 
-  // Add "AI/" prefix to distinguish AI-generated labels
-  const labelWithPrefix = `AI/${aiLabel}`;
+  // Use label as-is without prefix
+  const labelWithPrefix = aiLabel;
 
   return setImapLabel(account, messageId, labelWithPrefix);
 }

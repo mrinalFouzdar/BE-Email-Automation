@@ -1,64 +1,56 @@
-import express from 'express';
+import express, { Application } from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger.js';
-import { passport } from './config/passport.js';
-import { } from './middleware/auth.middleware.js';
-import authRoutes from './modules/auth/auth.routes.js';
-import emailRoutes from './modules/emails/email.routes.js';
-import reminderRoutes from './modules/reminders/reminder.routes.js';
-import classifyRoutes from './modules/classify/classify.routes.js';
-import accountRoutes from './modules/accounts/account.routes.js';
-import extensionRoutes from './modules/extension/extension.routes.js';
-import imapSyncRoutes from './routes/imap-sync.routes.js';
-import { errorHandler } from './core/error.js';
+import apiRoutes from './routes/index.js';
+import {
+  errorHandler,
+  notFoundHandler,
+  requestLogger,
+  rateLimiter,
+} from './middlewares/index.js';
+import { logger } from './utils/index.js';
 
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
-app.use(passport.initialize());
+/**
+ * Create and configure Express application
+ */
+export const createApp = (): Application => {
+  const app = express();
 
-// Request Logging Middleware
-app.use((req, res, next) => {
-  const start = Date.now();
-  const { method, url } = req;
+  // Middleware
+  app.use(cors());
+  app.use(bodyParser.json());
+  app.use(bodyParser.urlencoded({ extended: true }));
 
-  // Hook into response finish to log after request is processed
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    const status = res.statusCode;
-    
-    // Colorize status code
-    let statusColor = '\x1b[32m'; // Green for 2xx
-    if (status >= 300) statusColor = '\x1b[36m'; // Cyan for 3xx
-    if (status >= 400) statusColor = '\x1b[33m'; // Yellow for 4xx
-    if (status >= 500) statusColor = '\x1b[31m'; // Red for 5xx
-    const resetColor = '\x1b[0m';
+  // Request logging
+  app.use(requestLogger);
 
-    console.log(`[${new Date().toISOString()}] ${method} ${url} ${statusColor}${status}${resetColor} - ${duration}ms`);
+  // Rate limiting
+  app.use(rateLimiter.middleware());
+
+  // API Routes
+  app.use('/api', apiRoutes);
+
+  // Root endpoint
+  app.get('/', (req, res) => {
+    res.json({
+      success: true,
+      message: 'Email RAG API Server',
+      version: '1.0.0',
+      docs: '/api-docs',
+      api: {
+        v1: '/api/v1',
+        health: '/api/v1/health',
+      },
+    });
   });
 
-  next();
-});
+  // 404 Handler
+  app.use(notFoundHandler);
 
-app.get('/', (_req, res) => res.send('Email RAG Backend is running'));
+  // Error Handler (must be last)
+  app.use(errorHandler);
 
-// Swagger Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'Email RAG API Docs'
-}));
-// requireAuth
-// API Routes
-app.use('/oauth2', authRoutes);
-app.use('/api/emails',  emailRoutes);
-app.use('/api/reminders',  reminderRoutes);
-app.use('/api/classify',  classifyRoutes);
-app.use('/api/accounts',  accountRoutes);
-app.use('/api/extension',  extensionRoutes);
-app.use('/api/imap-sync',  imapSyncRoutes);
+  logger.info('✅ Express app configured successfully');
 
-app.use(errorHandler);
-
-export default app;
+  return app;
+};

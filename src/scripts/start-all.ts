@@ -94,13 +94,45 @@ async function startOllama() {
   }
 }
 
+
+async function killPort(port: number) {
+  try {
+    const isWin = process.platform === 'win32';
+    if (isWin) {
+      const { stdout } = await execAsync(`netstat -ano | findstr :${port}`);
+      if (stdout) {
+        const lines = stdout.trim().split('\n');
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/);
+          const pid = parts[parts.length - 1];
+          if (pid && pid !== '0') {
+            try {
+              await execAsync(`taskkill /F /PID ${pid}`);
+              console.log(`✓ Killed process ${pid} on port ${port}`);
+            } catch (e) {
+              // Ignore if already killed
+            }
+          }
+        }
+      }
+    } else {
+      await execAsync(`lsof -ti:${port} | xargs kill -9`);
+    }
+  } catch (error) {
+    // Ignore errors (e.g. no process found)
+  }
+}
+
 async function startBackend() {
+  // Kill any process on port 4000
+  await killPort(4000);
+
   console.log('🚀 Starting backend server...');
   console.log('=' .repeat(60));
   console.log('');
 
   // Spawn backend process
-  const backend = spawn('tsx', ['src/index.ts'], {
+  const backend = spawn('tsx', ['src/server.ts'], {
     cwd: process.cwd(),
     stdio: 'inherit',
     shell: true

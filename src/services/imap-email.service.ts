@@ -80,9 +80,13 @@ export async function fetchEmailsViaImap(
           return;
         }
 
-        // Fetch last N emails
-        const start = Math.max(1, totalMessages - maxEmails + 1);
+        // Fetch emails based on maxEmails parameter
+        // If maxEmails is not provided or is larger than total, fetch all
+        const shouldFetchAll = !maxEmails || maxEmails >= totalMessages;
+        const start = shouldFetchAll ? 1 : Math.max(1, totalMessages - maxEmails + 1);
         const end = totalMessages;
+
+        console.log(`📥 Fetching ${shouldFetchAll ? 'all' : 'last ' + maxEmails} emails (${start} to ${end})...`);
 
         const fetch = imap.seq.fetch(`${start}:${end}`, {
           bodies: ['HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID)', 'TEXT'],
