@@ -5,10 +5,11 @@ import { successResponse, paginatedResponse, createdResponse } from '../utils/re
 import { UnauthorizedError, NotFoundError, ValidationError } from '../middlewares/error.middleware.js';
 import { userModel } from '../models/user.model.js';
 import { accountModel } from '../models/account.model.js';
-import { labelApprovalService } from '../services/label-approval.service.js';
+import { labelApprovalService } from '../services/label/label-approval.service.js';
 import { db } from '../config/database.config.js';
 import { syncSingleImapAccount } from '../jobs/imap-sync-single.job.js';
 import { encryptPassword } from '../services/encryption.service.js';
+import { initializeSystemLabelsInMailbox } from '../services/label/imap-label.service.js';
 
 export class AdminController {
   /**
@@ -123,7 +124,6 @@ export class AdminController {
       password,
       name,
       role: role || 'user',
-      is_active: true,
     });
 
     // Create IMAP account only for regular users (not admins)
@@ -132,6 +132,7 @@ export class AdminController {
       try {
         // Encrypt IMAP password before storing
         const encryptedPassword = encryptPassword(imapPassword);
+        // console.log("🚀 ~ AdminController ~ encryptedPassword:", encryptedPassword)
 
         imapAccount = await accountModel.create({
           user_id: newUser.id,
@@ -149,6 +150,26 @@ export class AdminController {
           status: 'connected', // Set as connected so sync can run
           is_active: true,
         } as any);
+
+        // Initialize default system labels in the mailbox (Escalation, Urgent, MOM)
+        console.log(`📂 Initializing system labels for account ID: ${imapAccount.id}`);
+        try {
+          const labelInitResult = await initializeSystemLabelsInMailbox({
+            imap_host: imapHost,
+            imap_port: imapPort,
+            imap_username: email,
+            imap_password_encrypted: encryptedPassword
+          });
+          
+          if (labelInitResult.success) {
+            console.log(`✅ System labels initialized for ${email}:`, labelInitResult.created);
+          } else {
+            console.warn(`⚠️ Partial/failed label initialization for ${email}:`, labelInitResult.errors);
+          }
+        } catch (labelError: any) {
+          console.error(`❌ Failed to initialize system labels for ${email}:`, labelError.message);
+          // Continue execution - label failure shouldn't block account creation
+        }
 
         // Automatically trigger email sync in background (don't wait for it)
         console.log(`🔄 Triggering automatic email sync for account ID: ${imapAccount.id}`);
@@ -196,7 +217,7 @@ export class AdminController {
     }
 
     // Prevent self-demotion
-    if (req.user?.userId === userId && role === 'user') {
+    if (req.user?.id === userId && role === 'user') {
       throw new UnauthorizedError('Cannot demote yourself from admin');
     }
 
@@ -211,6 +232,7 @@ export class AdminController {
    */
   getAllPendingSuggestions = asyncHandler(async (req: AuthRequest, res: Response) => {
     const suggestions = await labelApprovalService.getAllPendingSuggestions();
+    console.log("🚀 ~ AdminController ~ suggestions:", suggestions)
 
     return successResponse(res, suggestions, 'Pending suggestions retrieved successfully');
   });
@@ -230,7 +252,7 @@ export class AdminController {
     const result = await labelApprovalService.processSuggestion({
       suggestion_id: suggestionId,
       action,
-      approved_by: req.user!.userId,
+      approved_by: req.user!.id,
     });
 
     if (!result.success) {
@@ -420,6 +442,7 @@ export class AdminController {
 
     return successResponse(res, null, 'Email account deleted successfully');
   });
+
 }
 
 export const adminController = new AdminController();

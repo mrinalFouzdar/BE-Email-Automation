@@ -23,6 +23,13 @@ class EmailController {
       search: req.query.search as string,
     };
 
+    // Handle user scoping
+    if (req.user?.role === 'admin' && req.query.userId) {
+      filters.userId = parseInt(req.query.userId as string);
+    } else {
+      filters.userId = req.user?.id;
+    }
+
     const emails = await emailModel.findWithFilters(filters, limit, offset);
     const total = await emailModel.countWithFilters(filters);
 
@@ -34,7 +41,9 @@ class EmailController {
    */
   getById = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
+    console.log("🚀 ~ EmailController ~ id:", id)
     const email = await emailModel.findById(parseInt(id));
+    console.log("🚀 ~ EmailController ~ email:", email)
 
     if (!email) {
       throw new NotFoundError('Email');
@@ -89,6 +98,15 @@ class EmailController {
     }
 
     return successResponse(res, null, 'Email deleted successfully');
+  });
+
+  /**
+   * Get email meta
+   */
+  getMeta = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const meta = await emailModel.getMeta(parseInt(id));
+    return successResponse(res, meta);
   });
 }
 

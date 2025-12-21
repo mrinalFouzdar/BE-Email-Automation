@@ -3,7 +3,7 @@ import { AuthRequest } from '../types/api.types.js';
 import { asyncHandler } from '../utils/asyncHandler.util.js';
 import { successResponse } from '../utils/response.util.js';
 import { UnauthorizedError } from '../middlewares/error.middleware.js';
-import { labelApprovalService } from '../services/label-approval.service.js';
+import { labelApprovalService } from '../services/label/label-approval.service.js';
 import { db } from '../config/database.config.js';
 
 export class LabelApprovalController {
@@ -12,26 +12,36 @@ export class LabelApprovalController {
    * GET /api/v1/labels/pending
    */
   getMyPendingSuggestions = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const userId = req.user!.userId;
+    let userId = req.user!.id;
+    
+    // Admin can view other users' suggestions
+    if (req.user?.role === 'admin' && req.query.userId) {
+      userId = parseInt(req.query.userId as string);
+    }
+
     const suggestions = await labelApprovalService.getPendingSuggestionsByUser(userId);
 
     return successResponse(res, suggestions, 'Pending suggestions retrieved successfully');
   });
 
   /**
-   * Approve or reject a label suggestion (user can only process their own)
+   * Approve or reject a label suggestion
    * POST /api/v1/labels/suggestions/:id/process
+   *
+   * - Users can only process their own suggestions
+   * - Admins can process suggestions for any user
    */
   processLabelSuggestion = asyncHandler(async (req: AuthRequest, res: Response) => {
     const suggestionId = parseInt(req.params.id);
     const { action } = req.body; // 'approve' or 'reject'
-    const userId = req.user!.userId;
+    const currentUserId = req.user!.id;
+    const isAdmin = req.user!.role === 'admin';
 
     if (!['approve', 'reject'].includes(action)) {
       throw new UnauthorizedError('Invalid action. Must be "approve" or "reject"');
     }
 
-    // Check if suggestion belongs to the user
+    // Check if suggestion exists
     const suggestionCheck = await db.query(
       'SELECT user_id, email_id FROM pending_label_suggestions WHERE id = $1',
       [suggestionId]
@@ -41,34 +51,51 @@ export class LabelApprovalController {
       throw new UnauthorizedError('Suggestion not found');
     }
 
-    if (suggestionCheck.rows[0].user_id !== userId) {
+    const suggestionUserId = suggestionCheck.rows[0].user_id;
+
+    // Authorization check: User can only process their own, admin can process any
+    if (!isAdmin && suggestionUserId !== currentUserId) {
       throw new UnauthorizedError('You can only process your own label suggestions');
     }
 
-    // Process the suggestion
+    // Log admin approval for audit trail
+    if (isAdmin && suggestionUserId !== currentUserId) {
+      console.log(`👨‍💼 Admin ${currentUserId} processing suggestion for user ${suggestionUserId} (${action})`);
+    }
+
+    // Process the suggestion (approved_by is the current user/admin)
     const result = await labelApprovalService.processSuggestion({
       suggestion_id: suggestionId,
       action,
-      approved_by: userId,
+      approved_by: currentUserId,
     });
 
     if (!result.success) {
       return successResponse(res, result, result.message, 400);
     }
 
-    // If approved, auto-apply to similar emails
+    // If approved, auto-apply to similar emails (for the suggestion owner, not admin)
     if (action === 'approve' && result.label_id) {
       try {
         const appliedCount = await labelApprovalService.autoApplyToSimilarEmails(
           result.label_id,
-          userId,
+          suggestionUserId, // Use suggestion owner's ID for auto-apply
           suggestionCheck.rows[0].email_id
         );
 
+        const message = isAdmin && suggestionUserId !== currentUserId
+          ? `Admin approved: Label applied to ${appliedCount} similar emails for user ${suggestionUserId}`
+          : `Label approved and applied to ${appliedCount} similar emails`;
+
         return successResponse(
           res,
-          { ...result, similar_emails_labeled: appliedCount },
-          `Label approved and applied to ${appliedCount} similar emails`
+          {
+            ...result,
+            similar_emails_labeled: appliedCount,
+            approved_by_admin: isAdmin && suggestionUserId !== currentUserId,
+            suggestion_user_id: suggestionUserId,
+          },
+          message
         );
       } catch (error) {
         // Continue even if auto-apply fails
@@ -76,7 +103,11 @@ export class LabelApprovalController {
       }
     }
 
-    return successResponse(res, result, result.message);
+    const message = isAdmin && suggestionUserId !== currentUserId
+      ? `Admin ${action}ed suggestion for user ${suggestionUserId}`
+      : result.message;
+
+    return successResponse(res, result, message);
   });
 
   /**
@@ -84,7 +115,7 @@ export class LabelApprovalController {
    * GET /api/v1/labels/pending/count
    */
   getPendingCount = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const userId = req.user!.userId;
+    const userId = req.user!.id;
 
     const result = await db.query(
       'SELECT COUNT(*) FROM pending_label_suggestions WHERE user_id = $1 AND status = $2',

@@ -26,37 +26,44 @@ export class EmailModel extends BaseModel<Email> {
     let paramCount = 1;
 
     if (filters.is_unread !== undefined) {
-      conditions.push(`is_unread = $${paramCount++}`);
+      conditions.push(`e.is_unread = $${paramCount++}`);
       params.push(filters.is_unread);
     }
 
     if (filters.sender) {
-      conditions.push(`sender_email ILIKE $${paramCount++}`);
+      conditions.push(`e.sender_email ILIKE $${paramCount++}`);
       params.push(`%${filters.sender}%`);
     }
 
     if (filters.search) {
-      conditions.push(`(subject ILIKE $${paramCount} OR body ILIKE $${paramCount})`);
+      conditions.push(`(e.subject ILIKE $${paramCount} OR e.body ILIKE $${paramCount})`);
       params.push(`%${filters.search}%`);
       paramCount++;
     }
 
     if (filters.from_date) {
-      conditions.push(`received_at >= $${paramCount++}`);
+      conditions.push(`e.received_at >= $${paramCount++}`);
       params.push(filters.from_date);
     }
 
     if (filters.to_date) {
-      conditions.push(`received_at <= $${paramCount++}`);
+      conditions.push(`e.received_at <= $${paramCount++}`);
       params.push(filters.to_date);
+    }
+
+    if (filters.userId) {
+      conditions.push(`ea.user_id = $${paramCount++}`);
+      params.push(filters.userId);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const query = `
-      SELECT * FROM ${this.tableName}
+      SELECT e.* 
+      FROM ${this.tableName} e
+      JOIN email_accounts ea ON e.account_id = ea.id
       ${whereClause}
-      ORDER BY received_at DESC
+      ORDER BY e.received_at DESC
       LIMIT $${paramCount++}
       OFFSET $${paramCount}
     `;
@@ -76,34 +83,44 @@ export class EmailModel extends BaseModel<Email> {
     let paramCount = 1;
 
     if (filters.is_unread !== undefined) {
-      conditions.push(`is_unread = $${paramCount++}`);
+      conditions.push(`e.is_unread = $${paramCount++}`);
       params.push(filters.is_unread);
     }
 
     if (filters.sender) {
-      conditions.push(`sender_email ILIKE $${paramCount++}`);
+      conditions.push(`e.sender_email ILIKE $${paramCount++}`);
       params.push(`%${filters.sender}%`);
     }
 
     if (filters.search) {
-      conditions.push(`(subject ILIKE $${paramCount} OR body ILIKE $${paramCount})`);
+      conditions.push(`(e.subject ILIKE $${paramCount} OR e.body ILIKE $${paramCount})`);
       params.push(`%${filters.search}%`);
       paramCount++;
     }
 
     if (filters.from_date) {
-      conditions.push(`received_at >= $${paramCount++}`);
+      conditions.push(`e.received_at >= $${paramCount++}`);
       params.push(filters.from_date);
     }
 
     if (filters.to_date) {
-      conditions.push(`received_at <= $${paramCount++}`);
+      conditions.push(`e.received_at <= $${paramCount++}`);
       params.push(filters.to_date);
+    }
+
+    if (filters.userId) {
+      conditions.push(`ea.user_id = $${paramCount++}`);
+      params.push(filters.userId);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const query = `SELECT COUNT(*) FROM ${this.tableName} ${whereClause}`;
+    const query = `
+      SELECT COUNT(*) 
+      FROM ${this.tableName} e
+      JOIN email_accounts ea ON e.account_id = ea.id
+      ${whereClause}
+    `;
 
     const result = await this.query(query, params);
     return parseInt(result.rows[0].count, 10);
@@ -146,6 +163,15 @@ export class EmailModel extends BaseModel<Email> {
     };
 
     return this.create(emailData);
+  }
+
+  /**
+   * Get email meta by email ID
+   */
+  async getMeta(emailId: number): Promise<any> {
+    const query = `SELECT * FROM email_meta WHERE email_id = $1`;
+    const result = await this.query(query, [emailId]);
+    return result.rows[0] || {};
   }
 }
 

@@ -37,7 +37,7 @@ export interface PendingLabelSuggestion {
   email_id: number;
   user_id: number;
   suggested_label_name: string;
-  suggested_by: 'ai' | 'system';
+  suggested_by: 'ai' | 'system' | 'similarity' | 'hybrid';
   confidence_score?: number;
   reasoning?: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -50,7 +50,7 @@ export interface PendingLabelSuggestionCreateInput {
   email_id: number;
   user_id: number;
   suggested_label_name: string;
-  suggested_by?: 'ai' | 'system';
+  suggested_by?: 'ai' | 'system' | 'similarity' | 'hybrid';
   confidence_score?: number;
   reasoning?: string;
 }

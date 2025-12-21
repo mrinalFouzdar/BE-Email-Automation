@@ -1,1 +1,0 @@
-ALTER TABLE emails ADD COLUMN IF NOT EXISTS sender_name TEXT;

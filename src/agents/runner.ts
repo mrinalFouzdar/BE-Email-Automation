@@ -1,6 +1,6 @@
 import { Client } from 'pg';
 import dotenv from 'dotenv';
-import { EmailProcessingService } from '../services/email-processing.service';
+import { EmailProcessingService } from '../services/email/email-processing.service';
 import { processAllAccounts } from '../emailProcessor';
 dotenv.config();
 

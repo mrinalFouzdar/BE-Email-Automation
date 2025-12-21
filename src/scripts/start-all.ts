@@ -131,8 +131,8 @@ async function startBackend() {
   console.log('=' .repeat(60));
   console.log('');
 
-  // Spawn backend process
-  const backend = spawn('tsx', ['src/server.ts'], {
+  // Spawn backend process with watch mode for hot-reloading
+  const backend = spawn('tsx', ['watch', 'src/server.ts'], {
     cwd: process.cwd(),
     stdio: 'inherit',
     shell: true

@@ -3,6 +3,7 @@ import { accountModel } from '../models';
 import { AuthRequest } from '../types';
 import { asyncHandler, successResponse, createdResponse } from '../utils';
 import { NotFoundError, UnauthorizedError, ValidationError } from '../middlewares';
+import { initializeSystemLabelsInMailbox } from '../services/label/imap-label.service';
 
 class AccountController {
   /**
@@ -44,6 +45,32 @@ class AccountController {
       throw new UnauthorizedError();
     }
 
+    // Validate IMAP credentials are provided
+    const { email, provider, imap_host, imap_port, imap_user, imap_password } = req.body;
+    
+    if (!email) {
+      throw new ValidationError('Email address is required');
+    }
+
+    // For IMAP accounts, ensure all required fields are provided
+    if (provider === 'imap' || imap_host) {
+      if (!imap_host || !imap_user || !imap_password) {
+        throw new ValidationError(
+          'IMAP accounts require: imap_host, imap_user, and imap_password'
+        );
+      }
+
+      // Validate IMAP host format
+      if (!imap_host.includes('.')) {
+        throw new ValidationError('Invalid IMAP host format (e.g., imap.gmail.com)');
+      }
+
+      // Validate port if provided
+      if (imap_port && (imap_port < 1 || imap_port > 65535)) {
+        throw new ValidationError('IMAP port must be between 1 and 65535');
+      }
+    }
+
     // Check if account already exists
     const existingAccount = await accountModel.findByEmail(req.body.email);
     if (existingAccount) {
@@ -54,6 +81,28 @@ class AccountController {
       ...req.body,
       user_id: req.user.id,
     });
+
+    // Initialize system labels in Gmail/Outlook mailbox (for IMAP accounts)
+    if (account.imap_host && account.imap_user) {
+      try {
+        console.log('🏷️ Initializing system labels in mailbox...');
+        const result = await initializeSystemLabelsInMailbox({
+          imap_host: account.imap_host,
+          imap_port: account.imap_port || 993,
+          imap_username: account.imap_user,
+          imap_password_encrypted: account.imap_password || '',
+        });
+        
+        if (result.success) {
+          console.log(`✓ Created ${result.created.length} system labels in mailbox: ${result.created.join(', ')}`);
+        } else {
+          console.warn(`⚠️ Some labels failed to create: ${result.errors?.join(', ')}`);
+        }
+      } catch (error: any) {
+        // Don't fail account creation if label initialization fails
+        console.error('Failed to initialize system labels in mailbox:', error.message);
+      }
+    }
 
     return createdResponse(res, account, 'Account created successfully');
   });

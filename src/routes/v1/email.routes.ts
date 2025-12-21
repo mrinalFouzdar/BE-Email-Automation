@@ -32,6 +32,13 @@ router.get('/unread-count', emailController.getUnreadCount);
 router.get('/:id', validate(emailIdParamSchema), emailController.getById);
 
 /**
+ * @route   GET /api/v1/emails/:id/meta
+ * @desc    Get email meta
+ * @access  Public
+ */
+router.get('/:id/meta', validate(emailIdParamSchema), emailController.getMeta);
+
+/**
  * @route   POST /api/v1/emails
  * @desc    Create new email
  * @access  Private

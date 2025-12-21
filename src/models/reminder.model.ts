@@ -32,6 +32,23 @@ export class ReminderModel extends BaseModel<Reminder> {
   }
 
   /**
+   * Find reminders by user ID
+   */
+  async findByUserId(userId: number, limit = 50, resolved = false): Promise<Reminder[]> {
+    const query = `
+      SELECT r.*
+      FROM reminders r
+      JOIN emails e ON r.email_id = e.id
+      JOIN email_accounts a ON e.account_id = a.id
+      WHERE a.user_id = $1 AND r.resolved = $2
+      ORDER BY r.priority DESC, r.created_at DESC
+      LIMIT $3
+    `;
+    const result = await this.query(query, [userId, resolved, limit]);
+    return result.rows;
+  }
+
+  /**
    * Find unresolved reminders
    */
   async findUnresolved(limit = 50): Promise<Reminder[]> {

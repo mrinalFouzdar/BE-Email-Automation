@@ -22,9 +22,11 @@ const MIGRATIONS = [
   'add_email_meta_unique_constraint.sql',
   'add_user_roles.sql',
   'add_pending_label_suggestions.sql',
+  'add_label_embeddings.sql',
   'add_classifications_table.sql',
   'fix_missing_columns.sql',
   'add_emails_updated_at.sql',
+  'add_token_usage_stats.sql',
 ];
 
 export async function runMigrations(standalone = true) {

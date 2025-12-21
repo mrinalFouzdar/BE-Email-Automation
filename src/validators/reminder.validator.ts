@@ -34,5 +34,6 @@ export const getReminderQuerySchema = Joi.object({
     resolved: Joi.boolean().optional(),
     priority: Joi.number().integer().min(1).max(5).optional(),
     limit: Joi.number().integer().min(1).max(100).default(50),
+    userId: Joi.number().integer().positive().optional(),
   }),
 }).unknown(true); // Allow body and params (they'll be ignored)

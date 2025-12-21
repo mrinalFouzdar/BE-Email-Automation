@@ -11,9 +11,26 @@ class ReminderController {
   getAll = asyncHandler(async (req: AuthRequest, res: Response) => {
     const resolved = req.query.resolved === 'true' ? true : req.query.resolved === 'false' ? false : undefined;
     const limit = parseInt(req.query.limit as string) || 50;
+    const userId = req.query.userId ? parseInt(req.query.userId as string) : undefined;
 
     let reminders;
-    if (resolved === false) {
+    
+    // Handle Admin override
+    if (req.user?.role === 'admin' && userId) {
+      reminders = await reminderModel.findByUserId(userId, limit, resolved !== false); // Default to resolving=false (unresolved) if not specified? 
+      // Actually findByUserId logic needs to handle 'resolved' being undefined aka BOTH.
+      // My model implementation `WHERE r.resolved = $2` forces a choice.
+      // Let's stick to simple logic: if admin requests user, they usually want unresolved or all.
+      // The current UI sends NOTHING for resolved, which means `undefined`.
+      // Let's adjust logic to be robust. 
+      if (resolved !== undefined) {
+          reminders = await reminderModel.findByUserId(userId, limit, resolved);
+      } else {
+          // If not specified, maybe show unresolved? existing findUnresolved does that.
+          // Let's default to unresolved for consistency with "Active Reminders" view
+          reminders = await reminderModel.findByUserId(userId, limit, false);
+      }
+    } else if (resolved === false) {
       reminders = await reminderModel.findUnresolved(limit);
     } else if (resolved !== undefined) {
       reminders = await reminderModel.findAll({ where: { resolved } as any, limit });

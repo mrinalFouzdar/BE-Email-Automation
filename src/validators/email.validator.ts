@@ -24,6 +24,7 @@ export const getEmailsSchema = Joi.object({
     is_unread: Joi.boolean().optional(),
     sender: Joi.string().optional(),
     search: Joi.string().optional(),
+    userId: Joi.number().integer().positive().optional(),
   }).optional(),
   body: Joi.object().optional(),
   params: Joi.object().optional(),
@@ -33,7 +34,7 @@ export const emailIdParamSchema = Joi.object({
   params: Joi.object({
     id: Joi.number().integer().positive().required(),
   }),
-});
+}).unknown(true);
 
 export const markAsReadSchema = Joi.object({
   body: Joi.object({

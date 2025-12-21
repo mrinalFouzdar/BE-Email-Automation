@@ -1,6 +1,9 @@
-import crypto from 'crypto';
+import * as crypto from 'crypto';
+import * as dotenv from 'dotenv';
 
+dotenv.config();
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+// console.log('ENCRYPTION_KEY', ENCRYPTION_KEY);
 
 if (!ENCRYPTION_KEY) {
   throw new Error('ENCRYPTION_KEY environment variable is required');
