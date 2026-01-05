@@ -1,7 +1,7 @@
 import { client } from '../../config/db.js';
 import { LabelService } from '../label/label.service.js';
 import { syncAILabelToImap } from '../label/imap-label.service.js';
-import { ClassificationResult } from '../ai/gemini-classifier.service.js';
+import type { ClassificationResult } from '../ai/ai.types.js';
 import { LabelApprovalService } from '../label/label-approval.service.js';
 import { embeddingService } from '../ai/embedding.service.js';
 
@@ -171,8 +171,8 @@ export class EmailLabelAssignmentService {
       console.log(`  [7/7] Syncing to IMAP...`);
       // Get account details to sync
       const account = await this.getAccountDetails(accountId, db);
-      console.log(`    → Got account details: ${account?.provider_type}`);
-      if (account && (account.provider_type === 'imap' || account.provider_type === 'gmail')) {
+      console.log(`    → Got account details: ${account?.provider}`);
+      if (account && (account.provider === 'imap' || account.provider === 'gmail')) {
         const email = await this.getEmailDetails(emailId, db);
         if (email && email.message_id) {
           // Get all assigned labels

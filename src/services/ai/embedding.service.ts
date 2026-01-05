@@ -91,12 +91,7 @@ class EmbeddingService {
       this.ollamaEmbeddings = new OllamaEmbeddings({
         baseUrl: ollamaBaseUrl,
         model: ollamaModel,
-        requestOptions: {
-          // Force fetch to use the correct URL
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
+
       });
       logger.info(`LangChain Ollama configured: ${ollamaModel} at ${ollamaBaseUrl}`);
     } catch (error) {

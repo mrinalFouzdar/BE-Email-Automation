@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   name VARCHAR(255),
   role VARCHAR(50) DEFAULT 'user', -- 'user' or 'admin'
+  is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -31,14 +32,22 @@ CREATE TABLE IF NOT EXISTS email_accounts (
   id SERIAL PRIMARY KEY,
   user_id INT REFERENCES users(id) ON DELETE CASCADE,
   email VARCHAR(255) NOT NULL,
-  account_type VARCHAR(50) NOT NULL, -- 'gmail', 'imap'
+  account_name VARCHAR(255),
+  provider VARCHAR(50) NOT NULL, -- 'gmail', 'imap'
   is_active BOOLEAN DEFAULT TRUE,
 
   -- IMAP specific fields
   imap_host VARCHAR(255),
   imap_port INT,
   imap_username VARCHAR(255),
-  imap_encrypted_password TEXT,
+  imap_password_encrypted TEXT, -- Renamed from imap_encrypted_password to match code
+
+  -- Codebase requires these fields:
+  auto_fetch BOOLEAN DEFAULT TRUE,
+  fetch_interval INT DEFAULT 15, -- minutes
+  enable_ai_labeling BOOLEAN DEFAULT TRUE,
+  monitored_labels TEXT[], -- PostgreSQL array
+  status VARCHAR(50) DEFAULT 'connected', -- 'connected', 'error', 'disconnected'
 
   -- OAuth fields (for Gmail)
   access_token TEXT,
@@ -66,6 +75,8 @@ CREATE TABLE IF NOT EXISTS emails (
   message_id VARCHAR(255) UNIQUE,
   gmail_id TEXT,
   thread_id TEXT,
+  imap_uid INT, -- Unique ID from IMAP server
+  imap_mailbox VARCHAR(255),
 
   -- Email content
   subject TEXT,
@@ -126,6 +137,8 @@ CREATE TABLE IF NOT EXISTS email_meta (
   -- Related data
   related_meeting_id INT REFERENCES emails(id) ON DELETE SET NULL,
   classification JSONB,
+  suggested_label VARCHAR(255),
+  label_confidence FLOAT DEFAULT 0.0,
 
   -- Vector embeddings (768 dimensions for Gemini/Ollama)
   embedding vector(768),
@@ -155,7 +168,7 @@ CREATE INDEX IF NOT EXISTS idx_email_meta_vector
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS labels (
   id SERIAL PRIMARY KEY,
-  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  created_by_user_id INT REFERENCES users(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   color VARCHAR(7), -- Hex color code
   description TEXT,
@@ -163,11 +176,22 @@ CREATE TABLE IF NOT EXISTS labels (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
-  UNIQUE(user_id, name)
+  UNIQUE(created_by_user_id, name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_labels_user_id ON labels(user_id);
+CREATE INDEX IF NOT EXISTS idx_labels_user_id ON labels(created_by_user_id);
 CREATE INDEX IF NOT EXISTS idx_labels_name ON labels(name);
+
+-- ============================================================================
+-- 5a. USER LABELS (Many-to-Many for System Labels assignment)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS user_labels (
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  label_id INT REFERENCES labels(id) ON DELETE CASCADE,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  PRIMARY KEY (user_id, label_id)
+);
 
 -- ============================================================================
 -- 6. EMAIL LABELS (Many-to-Many)
@@ -177,7 +201,9 @@ CREATE TABLE IF NOT EXISTS email_labels (
   email_id INT REFERENCES emails(id) ON DELETE CASCADE,
   label_id INT REFERENCES labels(id) ON DELETE CASCADE,
   similarity_score FLOAT,
+  confidence_score FLOAT, -- Added for compatibility
   assignment_method VARCHAR(50), -- 'manual', 'ai_auto', 'ai_approved', 'similarity', 'hybrid'
+  assigned_by VARCHAR(50), -- 'ai', 'user', 'admin', 'system'
   assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
   UNIQUE(email_id, label_id)
@@ -203,13 +229,16 @@ CREATE TABLE IF NOT EXISTS label_embeddings (
 CREATE TABLE IF NOT EXISTS pending_label_suggestions (
   id SERIAL PRIMARY KEY,
   email_id INT REFERENCES emails(id) ON DELETE CASCADE,
-  label_id INT REFERENCES labels(id) ON DELETE CASCADE,
-  confidence FLOAT,
-  similarity_score FLOAT,
-  similar_email_ids INTEGER[],
-  suggestion_method VARCHAR(50), -- 'ai', 'similarity', 'hybrid'
-  status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  label_id INT REFERENCES labels(id) ON DELETE CASCADE, -- Optional, if suggesting an existing label
+  suggested_label_name VARCHAR(255), -- If suggesting a NEW label name
+  suggested_by VARCHAR(50) DEFAULT 'ai', -- 'ai', 'system'
+  confidence_score FLOAT, 
+  reasoning TEXT,
+  status VARCHAR(20) DEFAULT 'pending', -- pending, approved, rejected
+  approved_by INT REFERENCES users(id), -- User who approved/rejected
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  approved_at TIMESTAMP WITH TIME ZONE,
 
   UNIQUE(email_id, label_id)
 );
@@ -289,6 +318,86 @@ COMMENT ON TABLE labels IS 'User-defined labels/categories for organizing emails
 COMMENT ON TABLE email_labels IS 'Many-to-many relationship between emails and labels';
 COMMENT ON TABLE label_embeddings IS 'Centroid embeddings for each label';
 COMMENT ON TABLE pending_label_suggestions IS 'AI-suggested labels awaiting user approval';
+
+-- ============================================================================
+-- 293 (Cont). EMAIL ATTACHMENTS (for PDF RAG)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS email_attachments (
+  id SERIAL PRIMARY KEY,
+  email_id INTEGER NOT NULL REFERENCES emails(id) ON DELETE CASCADE,
+  filename VARCHAR(500) NOT NULL,
+  content_type VARCHAR(200) DEFAULT 'application/pdf',
+  file_size INTEGER,
+  content TEXT, -- Extracted text content from PDF
+  raw_data BYTEA, -- Optional: store the actual file data
+  embedding vector(768), -- Vector embedding for the PDF content
+  embedding_model VARCHAR(50), -- Track which model generated the embedding
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_attachments_email_id ON email_attachments(email_id);
+CREATE INDEX IF NOT EXISTS idx_email_attachments_filename ON email_attachments(filename);
+
+-- Create index for vector similarity search on PDF attachments
+CREATE INDEX IF NOT EXISTS idx_email_attachments_embedding ON email_attachments
+USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
+
+COMMENT ON TABLE email_attachments IS 'Stores PDF attachments from emails with vector embeddings for RAG search';
+
+-- ============================================================================
+-- 294. TOKEN USAGE SATS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS token_usage_stats (
+  id SERIAL PRIMARY KEY,
+  email_id INT REFERENCES emails(id) ON DELETE CASCADE,
+  classification_method VARCHAR(20) NOT NULL, -- 'cache', 'domain', 'regex', 'llm'
+  estimated_tokens INT DEFAULT 0,
+  tokens_saved INT DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(email_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_stats_method ON token_usage_stats(classification_method);
+CREATE INDEX IF NOT EXISTS idx_token_stats_created ON token_usage_stats(created_at);
+
+COMMENT ON TABLE token_usage_stats IS 'Tracks LLM token usage and optimization savings';
+
+-- ============================================================================
+-- 295. SEARCHABLE CONTENT VIEW (Emails + PDFs)
+-- ============================================================================
+CREATE OR REPLACE VIEW searchable_content AS
+SELECT
+  e.id as email_id,
+  e.subject,
+  e.body as content,
+  em.embedding,
+  em.embedding_model,
+  'email' as content_type,
+  e.sender_email as source,
+  e.received_at as date,
+  NULL as filename
+FROM emails e
+LEFT JOIN email_meta em ON e.id = em.email_id
+WHERE em.embedding IS NOT NULL
+
+UNION ALL
+
+SELECT
+  ea.email_id,
+  e.subject,
+  ea.content,
+  ea.embedding,
+  ea.embedding_model,
+  'pdf_attachment' as content_type,
+  e.sender_email as source,
+  e.received_at as date,
+  ea.filename
+FROM email_attachments ea
+JOIN emails e ON ea.email_id = e.id
+WHERE ea.embedding IS NOT NULL;
+
 
 -- ============================================================================
 -- SETUP COMPLETE

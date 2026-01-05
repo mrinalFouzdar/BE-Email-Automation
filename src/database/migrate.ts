@@ -10,24 +10,7 @@ const __dirname = dirname(__filename);
 
 // List of all migrations in order
 const MIGRATIONS = [
-  'init.sql',
-  'add_email_fields.sql',
-  'add_accounts_table.sql',
-  'add_imap_support.sql',
-  'add_manual_oauth_support.sql',
-  'add_users_table.sql',
-  'add_user_id_to_accounts.sql',
-  'add_labels_table.sql',
-  'add_sender_name.sql',
-  'add_email_meta_unique_constraint.sql',
-  'add_user_roles.sql',
-  'add_pending_label_suggestions.sql',
-  'add_label_embeddings.sql',
-  'add_classifications_table.sql',
-  'fix_missing_columns.sql',
-  'add_emails_updated_at.sql',
-  'add_token_usage_stats.sql',
-  'add_pdf_attachments.sql',
+  '00_initial_setup.sql',
 ];
 
 export async function runMigrations(standalone = true) {

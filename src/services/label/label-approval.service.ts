@@ -209,7 +209,7 @@ export class LabelApprovalService {
                 imap_host: account.imap_host,
                 imap_port: account.imap_port,
                 imap_username: account.imap_username,
-                imap_password_encrypted: account.imap_password_encrypted,
+                imap_password_encrypted: account.imap_encrypted_password,
               },
               email.gmail_id,
               label.name,

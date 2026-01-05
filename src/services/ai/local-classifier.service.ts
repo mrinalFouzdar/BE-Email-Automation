@@ -24,23 +24,11 @@ const DOMAIN_PATTERNS = {
   recruitment: ['indeed.com', 'glassdoor.com', 'linkedin.com', 'hired.com', 'jobs@', 'careers@'],
 };
 
-export interface ClassificationResult {
-  is_hierarchy: boolean;
-  is_client: boolean;
-  is_meeting: boolean;
-  is_escalation: boolean;
-  is_urgent: boolean;
-  suggested_label: string;
-  reasoning: string;
-}
+import type { ClassificationResult, ClassificationExample as FewShotExample } from './ai.types.js';
 
-export interface FewShotExample {
-  subject: string;
-  sender: string;
-  suggested_label: string;
-  reasoning: string;
-  similarity?: number; // Optional: Only present for semantic similarity
-}
+export { ClassificationResult, FewShotExample };
+
+// FewShotExample is now imported from types
 
 /**
  * Detect email category based on sender domain

@@ -42,7 +42,7 @@ export async function runImapSyncJob() {
         imap_password_encrypted,
         enable_ai_labeling
       FROM email_accounts
-      WHERE provider_type = 'imap'
+      WHERE provider = 'imap'
         AND status = 'connected'
         AND auto_fetch = true
     `);
@@ -184,7 +184,7 @@ export async function runImapSyncJob() {
 
         // Update last_sync timestamp
         await client.query(
-          'UPDATE email_accounts SET last_sync = NOW() WHERE id = $1',
+          'UPDATE email_accounts SET last_sync_at = NOW() WHERE id = $1',
           [account.id]
         );
 

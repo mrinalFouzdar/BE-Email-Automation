@@ -32,10 +32,10 @@ export async function syncSingleImapAccount(accountId: number) {
         imap_username,
         imap_password_encrypted,
         enable_ai_labeling,
-        provider_type,
+        provider,
         status
       FROM email_accounts
-      WHERE id = $1 AND provider_type = 'imap'
+      WHERE id = $1 AND provider = 'imap'
     `, [accountId]);
 
     if (accountResult.rows.length === 0) {
@@ -183,7 +183,7 @@ export async function syncSingleImapAccount(accountId: number) {
 
     // Update last_sync timestamp
     await client.query(
-      'UPDATE email_accounts SET last_sync = NOW(), status = $1 WHERE id = $2',
+      'UPDATE email_accounts SET last_sync_at = NOW(), status = $1 WHERE id = $2',
       ['connected', account.id]
     );
 

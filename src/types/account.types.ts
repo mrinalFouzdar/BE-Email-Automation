@@ -15,9 +15,16 @@ export interface EmailAccount {
   // IMAP fields
   imap_host?: string;
   imap_port?: number;
-  imap_user?: string;
-  imap_password?: string;
+  imap_username?: string;
+  imap_password_encrypted?: string;
   imap_tls?: boolean;
+
+  // Sync fields
+  auto_fetch: boolean;
+  fetch_interval: number;
+  enable_ai_labeling: boolean;
+  monitored_labels: string[];
+  status: string;
 
   last_sync_at?: Date;
   created_at: Date;
@@ -37,9 +44,16 @@ export interface AccountCreateInput {
   // IMAP
   imap_host?: string;
   imap_port?: number;
-  imap_user?: string;
-  imap_password?: string;
+  imap_username?: string;
+  imap_password_encrypted?: string;
   imap_tls?: boolean;
+
+  // Sync settings
+  auto_fetch?: boolean;
+  fetch_interval?: number;
+  enable_ai_labeling?: boolean;
+  monitored_labels?: string[];
+  status?: string;
 }
 
 export interface IMAPConfig {

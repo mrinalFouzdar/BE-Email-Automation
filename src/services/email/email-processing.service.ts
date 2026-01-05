@@ -1,7 +1,7 @@
 import { client } from '../../config/db.js';
 import { EmailClassifierAgent } from '../../modules/extension/langchain.service.js';
 import { EmailLabelAssignmentService } from './email-label-assignment.service.js';
-import { ClassificationResult } from '../ai/gemini-classifier.service.js';
+import type { ClassificationResult } from '../ai/ai.types.js';
 import { embeddingService } from '../ai/embedding.service.js';
 import { cleanEmailContent, cleanEmailSubject } from '../../utils/email-cleaner.util.js';
 

@@ -91,7 +91,7 @@ export async function setImapLabel(
         header: { 'message-id': messageId }
       });
 
-      console.log(`🔍 Search results: Found ${searchResults?.length || 0} matches`);
+      console.log(`🔍 Search results: Found ${Array.isArray(searchResults) ? searchResults.length : 0} matches`);
 
       if (!searchResults || searchResults.length === 0) {
         await client.logout();
@@ -303,7 +303,7 @@ export async function syncAILabelToImap(
   aiLabel: string,
   imapUid?: number,
   imapMailbox?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; method?: string }> {
   if (!aiLabel || aiLabel === 'Uncategorized') {
     return { success: true }; // Skip uncategorized labels
   }

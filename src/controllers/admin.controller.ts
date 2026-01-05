@@ -52,7 +52,7 @@ export class AdminController {
 
     // Get user's email accounts
     const accountsResult = await db.query(
-      'SELECT id, email, provider_type, status, created_at FROM email_accounts WHERE user_id = $1',
+      'SELECT id, email, provider, status, created_at FROM email_accounts WHERE user_id = $1',
       [userId]
     );
 
@@ -69,7 +69,7 @@ export class AdminController {
 
     // Get label count
     const labelCountResult = await db.query(
-      'SELECT COUNT(*) FROM user_labels WHERE user_id = $1',
+      'SELECT COUNT(*) FROM labels WHERE user_id = $1',
       [userId]
     );
 
@@ -138,7 +138,7 @@ export class AdminController {
           user_id: newUser.id,
           email: email, // Use same email for IMAP
           account_name: `${name}'s Email`,
-          provider_type: 'imap',
+          provider: 'imap',
           imap_host: imapHost,
           imap_port: imapPort,
           imap_username: email,
@@ -381,7 +381,7 @@ export class AdminController {
     });
 
     // If it's an IMAP account, trigger automatic email sync in background
-    if (account.provider_type === 'imap' && account.id) {
+    if (account.provider === 'imap' && account.id) {
       console.log(`🔄 Triggering automatic email sync for account ID: ${account.id}`);
       syncSingleImapAccount(account.id)
         .then((result) => {

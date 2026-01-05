@@ -13,6 +13,7 @@
     "migrate:db": "tsx src/database/migrate.ts",
     "seed:admin": "tsx src/database/seed-admin.ts",
     "setup": "npm run migrate:db && npm run seed:admin",
+    "sync:emails": "tsx src/scripts/sync-emails-manual.ts",
     "cleanup:imap": "tsx src/scripts/cleanup-imap-data.ts",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",

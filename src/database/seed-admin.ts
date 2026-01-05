@@ -35,6 +35,15 @@ export async function seedAdmin(standalone = true) {
 
       if (user.role === 'admin') {
         logger.info(`✓ Admin user already exists: ${user.email}`);
+        
+        // Force update password to ensure it matches current config
+        const password_hash = await bcrypt.hash(DEFAULT_ADMIN.password, 10);
+        await client.query(
+          'UPDATE users SET password_hash = $1, is_active = TRUE WHERE id = $2',
+          [password_hash, user.id]
+        );
+        logger.info(`✓ Updated admin password to match configuration`);
+        
         return user;
       } else {
         // Update existing user to admin
@@ -52,8 +61,8 @@ export async function seedAdmin(standalone = true) {
 
     // Create admin user
     const result = await client.query(
-      `INSERT INTO users (email, password_hash, name, role, created_at)
-       VALUES ($1, $2, $3, $4, NOW())
+      `INSERT INTO users (email, password_hash, name, role, is_active, created_at)
+       VALUES ($1, $2, $3, $4, TRUE, NOW())
        RETURNING id, email, name, role, created_at`,
       [DEFAULT_ADMIN.email, password_hash, DEFAULT_ADMIN.name, DEFAULT_ADMIN.role]
     );
@@ -78,9 +87,7 @@ export async function seedAdmin(standalone = true) {
 }
 
 // Run seed if this file is executed directly
-const isMainModule =
-  import.meta.url === `file://${process.argv[1]}` ||
-  import.meta.url.endsWith(process.argv[1]);
+const isMainModule = true; // Always run when executed via script
 
 if (isMainModule) {
   seedAdmin(true)

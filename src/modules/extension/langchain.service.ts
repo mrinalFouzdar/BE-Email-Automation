@@ -15,7 +15,9 @@ interface EmailData {
   receivedAt: string;
 }
 
-interface ClassificationResult {
+import type { ClassificationResult } from '../../services/ai/ai.types.js';
+
+interface OrchestratorResult {
   emailId: number;
   labels: {
     is_hierarchy: boolean;
@@ -306,7 +308,7 @@ class EmailProcessingOrchestrator {
     this.storageAgent = new StorageAgent();
   }
 
-  async process(emailData: EmailData): Promise<ClassificationResult> {
+  async process(emailData: EmailData): Promise<OrchestratorResult> {
     console.log('🤖 Multi-Agent System Processing Email...');
 
     // Step 1: Classifier Agent analyzes the email
@@ -355,7 +357,7 @@ class EmailProcessingOrchestrator {
 // Main export function
 export async function processEmailWithLangChain(
   emailData: EmailData
-): Promise<ClassificationResult> {
+): Promise<OrchestratorResult> {
   const orchestrator = new EmailProcessingOrchestrator();
   return await orchestrator.process(emailData);
 }
