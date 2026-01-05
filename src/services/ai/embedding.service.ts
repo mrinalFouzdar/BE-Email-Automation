@@ -193,7 +193,44 @@ class EmbeddingService {
       }
     }
 
+
     logger.error('All embedding generation methods failed.');
+    return null;
+  }
+
+  /**
+   * Generate embedding specifically for a target model
+   */
+  async generateEmbeddingForModel(text: string, targetModel: 'gemini' | 'ollama'): Promise<{ embedding: number[], model: string } | null> {
+    if (!text || !text.trim()) return null;
+    const safeText = text.substring(0, 2000);
+
+    if (targetModel === 'gemini') {
+      if (this.geminiEmbeddings) {
+        try {
+          const embedding = await this.geminiEmbeddings.embedQuery(safeText);
+          if (embedding && embedding.length > 0) return { embedding, model: 'gemini' };
+        } catch (error: any) {
+          logger.warn(`Specific Gemini embedding failed: ${error.message}`);
+        }
+      }
+    } else if (targetModel === 'ollama') {
+      if (this.ollamaEmbeddings) { // Try LangChain first
+        try {
+           const embedding = await this.ollamaEmbeddings.embedQuery(safeText);
+           if (embedding && embedding.length > 0) return { embedding, model: 'ollama' };
+        } catch (e: any) {
+          logger.warn(`Specific LangChain Ollama embedding failed: ${e.message}`);
+        }
+      }
+      
+      // Fallback to direct API
+      const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+      const ollamaModel = process.env.OLLAMA_EMBEDDING_MODEL || 'nomic-embed-text';
+      const embedding = await generateOllamaEmbeddingDirect(safeText, ollamaBaseUrl, ollamaModel);
+      if (embedding && embedding.length > 0) return { embedding, model: 'ollama' };
+    }
+
     return null;
   }
 

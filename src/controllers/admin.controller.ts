@@ -380,7 +380,23 @@ export class AdminController {
       user_id: userId,
     });
 
-    return createdResponse(res, account, 'Email account created successfully for user');
+    // If it's an IMAP account, trigger automatic email sync in background
+    if (account.provider_type === 'imap' && account.id) {
+      console.log(`🔄 Triggering automatic email sync for account ID: ${account.id}`);
+      syncSingleImapAccount(account.id)
+        .then((result) => {
+          if (result.success) {
+            console.log(`✅ Automatic sync completed for ${account.email}: ${result.stats?.new} new emails`);
+          } else {
+            console.error(`❌ Automatic sync failed for ${account.email}:`, result.error);
+          }
+        })
+        .catch((error) => {
+          console.error(`❌ Automatic sync error for ${account.email}:`, error.message);
+        });
+    }
+
+    return createdResponse(res, account, 'Email account created successfully for user. Email sync started automatically.');
   });
 
   /**

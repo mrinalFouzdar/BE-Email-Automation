@@ -2,6 +2,7 @@ import { Client } from 'pg';
 import dotenv from 'dotenv';
 import { fetchEmailsViaImap } from '../services/email/imap-email.service.js';
 import { EmailProcessingService } from '../services/email/email-processing.service';
+import { pdfProcessingService } from '../services/pdf/pdf-processing.service.js';
 
 dotenv.config();
 
@@ -108,6 +109,8 @@ export async function syncSingleImapAccount(accountId: number) {
           `INSERT INTO emails (
             gmail_id,
             message_id,
+            imap_uid,
+            imap_mailbox,
             sender_email,
             to_recipients,
             cc_recipients,
@@ -118,11 +121,13 @@ export async function syncSingleImapAccount(accountId: number) {
             received_at,
             account_id,
             created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
           RETURNING id`,
           [
             messageId,
             messageId,  // Use same messageId for both gmail_id and message_id
+            email.imapUid,
+            email.imapMailbox,
             email.from,
             email.to || [],
             email.cc || [],
@@ -141,6 +146,21 @@ export async function syncSingleImapAccount(accountId: number) {
       } else {
         emailId = existingEmail.rows[0].id;
         console.log(`  ⊙ Email already exists: "${email.subject.substring(0, 50)}..."`);
+        continue; // Skip processing if email already exists
+      }
+
+      // Process PDF Attachments
+      if (email.attachments && email.attachments.length > 0) {
+        console.log(`  📎 Processing ${email.attachments.length} PDF attachment(s)...`);
+        for (const attachment of email.attachments) {
+          try {
+            const processedPDF = await pdfProcessingService.processPDFAttachment(attachment);
+            await pdfProcessingService.storePDFAttachment(emailId, processedPDF, attachment.content);
+            console.log(`  ✓ Stored PDF: ${attachment.filename}`);
+          } catch (pdfError: any) {
+            console.error(`  ❌ Failed to process PDF ${attachment.filename}: ${pdfError.message}`);
+          }
+        }
       }
 
       // Process email (Classify + Embed + Assign Labels)

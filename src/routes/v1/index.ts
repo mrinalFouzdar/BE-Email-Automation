@@ -6,6 +6,7 @@ import labelRoutes from './label.routes';
 import reminderRoutes from './reminder.routes';
 import adminRoutes from './admin.routes.js';
 import analyticsRoutes from './analytics.routes.js';
+import chatRoutes from './chat.routes.js';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.use('/labels', labelRoutes); // All label endpoints including approval
 router.use('/reminders', reminderRoutes);
 router.use('/admin', adminRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/chat', chatRoutes); // AI-powered chat with RAG
 
 // Health check endpoint
 router.get('/health', (req, res) => {

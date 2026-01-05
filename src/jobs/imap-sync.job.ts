@@ -2,6 +2,7 @@ import { Client } from 'pg';
 import dotenv from 'dotenv';
 import { fetchEmailsViaImap } from '../services/email/imap-email.service.js';
 import { EmailProcessingService } from '../services/email/email-processing.service';
+import { pdfProcessingService } from '../services/pdf/pdf-processing.service.js';
 
 dotenv.config();
 
@@ -82,7 +83,7 @@ export async function runImapSyncJob() {
             console.log(`  📥 First sync - Fetching emails from IMAP...`);
             // Fetch latest 10 emails on first sync for testing
             // Increase this number if you want to fetch more emails on first sync
-            emails = await fetchEmailsViaImap(imapConfig, 10);
+            emails = await fetchEmailsViaImap(imapConfig, 2);
           } else {
             console.log(`  📥 Incremental sync - Fetching recent emails from IMAP...`);
             emails = await fetchEmailsViaImap(imapConfig, 50); // Fetch only last 50 emails
@@ -116,6 +117,9 @@ export async function runImapSyncJob() {
             const insertResult = await client.query(
               `INSERT INTO emails (
                 gmail_id,
+                message_id,
+                imap_uid,
+                imap_mailbox,
                 sender_email,
                 to_recipients,
                 cc_recipients,
@@ -126,10 +130,13 @@ export async function runImapSyncJob() {
                 received_at,
                 account_id,
                 created_at
-              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
               RETURNING id`,
               [
                 messageId,
+                messageId,  // Use same messageId for both gmail_id and message_id
+                email.imapUid,
+                email.imapMailbox,
                 email.from,
                 email.to || [],
                 email.cc || [],
@@ -150,7 +157,21 @@ export async function runImapSyncJob() {
             console.log(`  ⊙ Email already exists: "${email.subject.substring(0, 50)}..."`);
           }
 
-          // Step 4: Process Email (Classify + Embed + Assign Labels)
+          // Step 4: Process PDF Attachments
+          if (email.attachments && email.attachments.length > 0) {
+            console.log(`  📎 Processing ${email.attachments.length} PDF attachment(s)...`);
+            for (const attachment of email.attachments) {
+              try {
+                const processedPDF = await pdfProcessingService.processPDFAttachment(attachment);
+                await pdfProcessingService.storePDFAttachment(emailId, processedPDF, attachment.content);
+                console.log(`  ✓ Stored PDF: ${attachment.filename}`);
+              } catch (pdfError: any) {
+                console.error(`  ❌ Failed to process PDF ${attachment.filename}: ${pdfError.message}`);
+              }
+            }
+          }
+
+          // Step 5: Process Email (Classify + Embed + Assign Labels)
           if (email.isUnread) {
              // Using the centralized service ensures Embeddings are generated correctly
              await emailProcessingService.processEmail(emailId, client);

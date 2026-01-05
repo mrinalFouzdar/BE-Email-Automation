@@ -31,18 +31,22 @@ async function createImapClient(account: ImapAccount): Promise<ImapFlow> {
 }
 
 /**
- * Sets a label/flag on an IMAP email by Message-ID
+ * Sets a label/flag on an IMAP email by IMAP UID or Message-ID
  * For Gmail IMAP: Creates custom label (X-GM-LABELS)
  * For other IMAP: Sets keyword flag
  * @param account - IMAP account credentials
- * @param messageId - Email Message-ID header
+ * @param messageId - Email Message-ID header (used as fallback if imapUid not provided)
  * @param label - Label to add (e.g., "Work", "Important", "AI/Invoice")
+ * @param imapUid - Optional IMAP UID for direct access (faster and more reliable)
+ * @param imapMailbox - Optional mailbox name where UID is valid (CRITICAL: UID only works in its original mailbox!)
  * @returns Success status
  */
 export async function setImapLabel(
   account: ImapAccount,
   messageId: string,
-  label: string
+  label: string,
+  imapUid?: number,
+  imapMailbox?: string
 ): Promise<{ success: boolean; error?: string; method?: string }> {
   let client: ImapFlow | null = null;
 
@@ -52,38 +56,56 @@ export async function setImapLabel(
     // Check if this is Gmail IMAP (supports X-GM-LABELS)
     const isGmail = account.imap_host.includes('gmail');
 
-    // For Gmail, search in [Gmail]/All Mail to find all messages
-    // For other providers, search in INBOX
-    const searchMailbox = isGmail ? '[Gmail]/All Mail' : 'INBOX';
+    // CRITICAL: Use the mailbox where UID was captured, NOT a default mailbox
+    // UIDs are only valid within their original mailbox!
+    let searchMailbox: string;
+
+    if (imapUid && imapMailbox) {
+      // Use the stored mailbox where this UID is valid
+      searchMailbox = imapMailbox;
+      console.log(`✓ Using stored mailbox: ${searchMailbox} (UID context preserved)`);
+    } else {
+      // Fallback for old emails without mailbox info
+      searchMailbox = isGmail ? '[Gmail]/All Mail' : 'INBOX';
+      console.log(`⚠️  No mailbox info, using default: ${searchMailbox}`);
+    }
 
     try {
       await client.mailboxOpen(searchMailbox);
     } catch (mailboxError: any) {
-      // If [Gmail]/All Mail doesn't exist, fallback to INBOX
+      // If stored mailbox doesn't exist, fallback to INBOX
       console.log(`Mailbox ${searchMailbox} not found, falling back to INBOX`);
       await client.mailboxOpen('INBOX');
     }
 
-    // Search for message by Message-ID
-    console.log(`🔍 Searching for Message-ID: ${messageId}`);
-    const searchResults = await client.search({
-      header: { 'message-id': messageId }
-    });
+    let uid: number;
 
-    console.log(`🔍 Search results: Found ${searchResults?.length || 0} matches`);
+    // Use IMAP UID directly if provided (faster and more reliable)
+    if (imapUid) {
+      uid = imapUid;
+      console.log(`✓ Using provided IMAP UID: ${uid}`);
+    } else {
+      // Fallback: Search for message by Message-ID
+      console.log(`🔍 Searching for Message-ID: ${messageId}`);
+      const searchResults = await client.search({
+        header: { 'message-id': messageId }
+      });
 
-    if (!searchResults || searchResults.length === 0) {
-      await client.logout();
-      console.error(`❌ Message not found. Message-ID: ${messageId}`);
-      return { success: false, error: `Message not found in ${searchMailbox}` };
+      console.log(`🔍 Search results: Found ${searchResults?.length || 0} matches`);
+
+      if (!searchResults || searchResults.length === 0) {
+        await client.logout();
+        console.error(`❌ Message not found. Message-ID: ${messageId}`);
+        return { success: false, error: `Message not found in ${searchMailbox}` };
+      }
+
+      if (searchResults.length > 1) {
+        console.warn(`⚠️  Multiple messages found for Message-ID: ${messageId}. Using first result.`);
+      }
+
+      uid = searchResults[0];
+      console.log(`✓ Found message UID: ${uid} for Message-ID: ${messageId}`);
     }
-
-    if (searchResults.length > 1) {
-      console.warn(`⚠️  Multiple messages found for Message-ID: ${messageId}. Using first result.`);
-    }
-
-    const uid = searchResults[0];
-    console.log(`✓ Found message UID: ${uid} for Message-ID: ${messageId}`);
 
     // Verify we have the correct message by fetching its envelope
     try {
@@ -240,17 +262,21 @@ export async function setImapLabel(
  * @param account - IMAP account credentials
  * @param messageId - Email Message-ID header
  * @param labels - Array of labels to add
+ * @param imapUid - Optional IMAP UID for direct access
+ * @param imapMailbox - Optional mailbox name where UID is valid
  * @returns Success status
  */
 export async function setImapLabels(
   account: ImapAccount,
   messageId: string,
-  labels: string[]
+  labels: string[],
+  imapUid?: number,
+  imapMailbox?: string
 ): Promise<{ success: boolean; errors?: string[] }> {
   const errors: string[] = [];
 
   for (const label of labels) {
-    const result = await setImapLabel(account, messageId, label);
+    const result = await setImapLabel(account, messageId, label, imapUid, imapMailbox);
     if (!result.success && result.error) {
       errors.push(`${label}: ${result.error}`);
     }
@@ -267,12 +293,16 @@ export async function setImapLabels(
  * @param account - IMAP account credentials
  * @param messageId - Email Message-ID
  * @param aiLabel - Label suggested by AI (e.g., "Invoice", "Meeting", "Support")
+ * @param imapUid - Optional IMAP UID for direct access (recommended for better performance)
+ * @param imapMailbox - Optional mailbox name where UID is valid (CRITICAL for correct label assignment!)
  * @returns Success status
  */
 export async function syncAILabelToImap(
   account: ImapAccount,
   messageId: string,
-  aiLabel: string
+  aiLabel: string,
+  imapUid?: number,
+  imapMailbox?: string
 ): Promise<{ success: boolean; error?: string }> {
   if (!aiLabel || aiLabel === 'Uncategorized') {
     return { success: true }; // Skip uncategorized labels
@@ -281,7 +311,7 @@ export async function syncAILabelToImap(
   // Use label as-is without prefix
   const labelWithPrefix = aiLabel;
 
-  return setImapLabel(account, messageId, labelWithPrefix);
+  return setImapLabel(account, messageId, labelWithPrefix, imapUid, imapMailbox);
 }
 
 /**

@@ -178,6 +178,19 @@ export class EmailLabelAssignmentService {
           // Get all assigned labels
           const finalLabels = await this.labelService.getEmailLabels(emailId, db);
           console.log(`  🔄 Syncing ${finalLabels.length} labels to IMAP...`);
+
+          // Use imap_uid and imap_mailbox if available (faster and more reliable than Message-ID search)
+          const imapUid = email.imap_uid;
+          const imapMailbox = email.imap_mailbox;
+
+          if (imapUid && imapMailbox) {
+            console.log(`    → Using IMAP UID: ${imapUid} in mailbox: ${imapMailbox} for faster label sync`);
+          } else if (imapUid) {
+            console.log(`    ⚠️  IMAP UID: ${imapUid} found but mailbox unknown - may label wrong email!`);
+          } else {
+            console.log(`    → No IMAP UID found, will search by Message-ID: ${email.message_id}`);
+          }
+
           for (const label of finalLabels) {
             try {
               await syncAILabelToImap(
@@ -188,7 +201,9 @@ export class EmailLabelAssignmentService {
                   imap_password_encrypted: account.imap_password_encrypted
                 },
                 email.message_id,
-                label.name
+                label.name,
+                imapUid,
+                imapMailbox
               );
               console.log(`    ✓ Synced label: ${label.name}`);
             } catch (syncError) {

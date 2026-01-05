@@ -128,6 +128,26 @@ export class LabelApprovalController {
       'Pending count retrieved successfully'
     );
   });
+
+  /**
+   * Get ALL pending label suggestions (Admin view - all users)
+   * GET /api/v1/labels/pending-suggestions
+   * @access Admin only
+   */
+  getAllPendingSuggestions = asyncHandler(async (req: AuthRequest, res: Response) => {
+    // Only admins can view all users' suggestions
+    if (req.user!.role !== 'admin') {
+      throw new UnauthorizedError('Only admins can view all pending suggestions');
+    }
+
+    const suggestions = await labelApprovalService.getAllPendingSuggestions();
+
+    return successResponse(
+      res,
+      { suggestions },
+      'All pending suggestions retrieved successfully'
+    );
+  });
 }
 
 export const labelApprovalController = new LabelApprovalController();

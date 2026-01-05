@@ -27,6 +27,7 @@ const MIGRATIONS = [
   'fix_missing_columns.sql',
   'add_emails_updated_at.sql',
   'add_token_usage_stats.sql',
+  'add_pdf_attachments.sql',
 ];
 
 export async function runMigrations(standalone = true) {

@@ -64,6 +64,7 @@ export class EmailProcessingService {
       
       // 3. Generate Embedding (using aggressively cleaned content)
       console.log('  🧠 Generating embedding...');
+      console.log("🚀 ~ EmailProcessingService ~ processEmail ~ email.body :", email.body )
       const cleanedBodyForEmbedding = cleanEmailContent(email.body || '', {
         stripHtml: true,
         removeSignatures: true,

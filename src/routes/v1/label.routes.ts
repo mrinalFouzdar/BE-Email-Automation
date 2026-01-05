@@ -39,6 +39,13 @@ router.get('/pending', authenticate, labelApprovalController.getMyPendingSuggest
 router.get('/pending/count', authenticate, labelApprovalController.getPendingCount);
 
 /**
+ * @route   GET /api/v1/labels/pending-suggestions
+ * @desc    Get ALL pending label suggestions (Admin only - all users)
+ * @access  Admin
+ */
+router.get('/pending-suggestions', authenticate, labelApprovalController.getAllPendingSuggestions);
+
+/**
  * @route   GET /api/v1/labels/:id
  * @desc    Get label by ID
  * @access  Public

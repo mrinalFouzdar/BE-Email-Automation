@@ -89,3 +89,8 @@ export const authorize = (...roles: string[]) => {
     next();
   };
 };
+
+/**
+ * Alias for authenticate (for backward compatibility)
+ */
+export const authenticateJWT = authenticate;

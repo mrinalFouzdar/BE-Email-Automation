@@ -197,6 +197,8 @@ export class LabelApprovalService {
           logger.info(`   Subject: ${email.subject}`);
           logger.info(`   From: ${email.sender_email}`);
           logger.info(`   Message-ID (gmail_id): ${email.gmail_id}`);
+          logger.info(`   IMAP UID: ${email.imap_uid || 'not available'}`);
+          logger.info(`   IMAP Mailbox: ${email.imap_mailbox || 'not available'}`);
           logger.info(`   Account: ${account.imap_username}`);
 
           if (account.enable_ai_labeling) {
@@ -210,7 +212,9 @@ export class LabelApprovalService {
                 imap_password_encrypted: account.imap_password_encrypted,
               },
               email.gmail_id,
-              label.name
+              label.name,
+              email.imap_uid,
+              email.imap_mailbox
             );
 
             if (syncResult.success) {
@@ -297,7 +301,7 @@ export class LabelApprovalService {
 
       // Find similar emails for the same user that don't have this label
       const similarEmailsResult = await db.query(
-        `SELECT e.id, e.gmail_id, e.account_id,
+        `SELECT e.id, e.gmail_id, e.imap_uid, e.imap_mailbox, e.account_id,
                 1 - (em.embedding <=> $1::vector) as similarity
          FROM emails e
          JOIN email_meta em ON e.id = em.email_id
@@ -347,7 +351,9 @@ export class LabelApprovalService {
                   imap_password_encrypted: account.imap_password_encrypted,
                 },
                 row.gmail_id,
-                labelName
+                labelName,
+                row.imap_uid,
+                row.imap_mailbox
               );
             }
           }

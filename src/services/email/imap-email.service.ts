@@ -1,5 +1,6 @@
 import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
+import { convert } from 'html-to-text';
 import { decryptPassword } from '../encryption.service.js';
 
 interface ImapConfig {
@@ -17,7 +18,14 @@ interface ProcessedEmail {
   body: string;
   date: Date;
   messageId: string;
+  imapUid: number;
+  imapMailbox: string;
   isUnread: boolean;
+  attachments?: Array<{
+    filename: string;
+    contentType: string;
+    content: Buffer;
+  }>;
 }
 
 /**
@@ -89,10 +97,11 @@ export async function fetchEmailsViaImap(
     let processedCount = 0;
 
     imap.once('ready', () => {
-      imap.openBox('INBOX', true, (err, box) => {
+      const mailboxName = 'INBOX'; // Store mailbox name for UID context
+      imap.openBox(mailboxName, true, (err, box) => {
         if (err) {
           imap.end();
-          reject(new Error(`Failed to open INBOX: ${err.message}`));
+          reject(new Error(`Failed to open ${mailboxName}: ${err.message}`));
           return;
         }
 
@@ -125,6 +134,7 @@ export async function fetchEmailsViaImap(
         fetch.on('message', (msg, seqno) => {
           let emailData: Partial<ProcessedEmail> = {};
           let isUnread = false;
+          let imapUid: number = 0;
           let parsingComplete = false;
           let attributesComplete = false;
 
@@ -166,16 +176,65 @@ export async function fetchEmailsViaImap(
                 const emailDate = parsed.date || new Date();
                 console.log(`📧 Email from: ${fromAddress} | subject: ${parsed.subject} | Time: ${emailDate}`);
 
+                // Extract PDF attachments
+                const pdfAttachments: Array<{filename: string; contentType: string; content: Buffer}> = [];
+                if (parsed.attachments && parsed.attachments.length > 0) {
+                  for (const attachment of parsed.attachments) {
+                    if (attachment.contentType === 'application/pdf' || attachment.filename?.toLowerCase().endsWith('.pdf')) {
+                      pdfAttachments.push({
+                        filename: attachment.filename || 'unknown.pdf',
+                        contentType: attachment.contentType || 'application/pdf',
+                        content: attachment.content
+                      });
+                      console.log(`📎 Found PDF attachment: ${attachment.filename}`);
+                    }
+                  }
+                }
+
+                console.log("🚀 ~ fetchEmailsViaImap ~ parsed.text:", parsed.text)
+                console.log("🚀 ~ fetchEmailsViaImap ~ parsed.html:", parsed.html)
+
+                // Use text from HTML if plain text is missing or contains "Enable Javascript" placeholder
+                const textBody = parsed.text || '';
+                const htmlBody = parsed.html || '';
+                let finalBody = textBody;
+
+                // Check for invalid plain text content
+                const isInvalidText = !textBody || 
+                                      textBody.includes('Please Enable Javascript') || 
+                                      textBody.includes('Enable JavaScript') ||
+                                      (textBody.length < 50 && htmlBody.length > 200);
+
+                if (isInvalidText && htmlBody) {
+                  console.log('🔄 Converting HTML to Text (Plain text was invalid/missing)...');
+                  finalBody = convert(htmlBody, {
+                    wordwrap: false, // Don't enforce line breaks, let the UI handle wrapping
+                    selectors: [
+                      { selector: 'img', format: 'skip' },
+                      { selector: 'a', options: { hideLinkHrefIfSameAsText: true } }
+                    ]
+                  });
+                }
+
+                // Clean up excessive whitespace and newlines (allow max 2 newlines for paragraphs)
+                finalBody = finalBody
+                  .replace(/(\r\n|\r|\n){3,}/g, '\n\n') // Collapse 3+ newlines to 2
+                  .trim();
+
                 emailData = {
                   subject: parsed.subject || '(No Subject)',
                   from: fromAddress,
                   to: extractEmails(parsed.to),
                   cc: extractEmails(parsed.cc),
-                  body: parsed.text || parsed.html || '',
+                  body: finalBody,
                   date: emailDate,
                   messageId: normalizeMessageId(parsed.messageId || `generated-${seqno}-${Date.now()}`),
-                  isUnread
+                  imapUid,
+                  imapMailbox: mailboxName,
+                  isUnread,
+                  attachments: pdfAttachments.length > 0 ? pdfAttachments : undefined
                 };
+                console.log("🚀 ~ fetchEmailsViaImap ~ emailData:", emailData)
                 console.log("🚀 ~ fetchEmailsViaImap ~ parsed.messageId:", parsed.messageId)
 
                 parsingComplete = true;
@@ -187,7 +246,9 @@ export async function fetchEmailsViaImap(
           msg.once('attributes', (attrs) => {
             // Check if email is unread
             isUnread = !attrs.flags.includes('\\Seen');
-            console.log("🚀 ~ fetchEmailsViaImap ~ from:", emailData.from, "| isUnread:", isUnread)
+            // Capture IMAP UID for future label operations
+            imapUid = attrs.uid;
+            console.log("🚀 ~ fetchEmailsViaImap ~ from:", emailData.from, "| isUnread:", isUnread, "| imapUid:", imapUid)
             attributesComplete = true;
             tryPushEmail(); // Try to push if parsing is also complete
           });
